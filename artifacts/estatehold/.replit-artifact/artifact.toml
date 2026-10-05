@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Estatehold"
+description = "A Nigeria-focused property marketplace for verified sales, rentals, social housing, property sourcing, and tenant protection. Includes role-based workflows for buyers, tenants, landlords, agents, attorneys, and administrators."
+version = "1.0.0"
+id = "artifacts/estatehold"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23465
+
+[services.development]
+run = "pnpm --filter @workspace/estatehold run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/estatehold", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/estatehold/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23465"
+BASE_PATH = "/"

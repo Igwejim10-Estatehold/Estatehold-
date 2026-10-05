@@ -2,21 +2,26 @@ openapi: 3.1.0
 info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
-  version: 0.1.0
-  description: API specification
+  version: 0.2.0
+  description: Estatehold property marketplace API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: config
+  - name: marketplace
+  - name: requests
+  - name: complaints
+  - name: account
+  - name: payments
+  - name: admin
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +29,903 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /config:
+    get:
+      operationId: getPublicConfig
+      tags: [config]
+      summary: Public browser configuration
+      responses:
+        "200":
+          description: Public configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicConfig"
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [marketplace]
+      summary: Home dashboard content
+      responses:
+        "200":
+          description: Dashboard content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /properties:
+    get:
+      operationId: listProperties
+      tags: [marketplace]
+      summary: Browse properties
+      parameters:
+        - in: query
+          name: category
+          schema:
+            $ref: "#/components/schemas/PropertyCategory"
+        - in: query
+          name: intent
+          schema:
+            type: string
+            enum: [sale, rent, social]
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: town
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Property results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Property"
+    post:
+      operationId: createProperty
+      tags: [marketplace]
+      summary: Create a property listing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyInput"
+      responses:
+        "201":
+          description: Listing created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+  /properties/{propertyId}:
+    get:
+      operationId: getProperty
+      tags: [marketplace]
+      summary: Get a property
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      responses:
+        "200":
+          description: Property details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+  /transactions:
+    post:
+      operationId: createTransaction
+      tags: [payments]
+      summary: Create a property transaction and place a delisting lock
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+  /properties/{propertyId}/delisting-requests:
+    post:
+      operationId: requestPropertyDelisting
+      tags: [marketplace]
+      summary: Request admin review to delist a property
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      responses:
+        "202":
+          description: Delisting request queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+  /social-housing:
+    get:
+      operationId: listSocialHousingUnits
+      tags: [marketplace]
+      summary: Browse fractional housing units
+      responses:
+        "200":
+          description: Social housing units
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SocialHousingUnit"
+  /special-requests:
+    get:
+      operationId: listSpecialRequests
+      tags: [requests]
+      summary: List special property requests
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Special requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SpecialRequest"
+    post:
+      operationId: createSpecialRequest
+      tags: [requests]
+      summary: Request a property or location sourcing
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpecialRequestInput"
+      responses:
+        "201":
+          description: Request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpecialRequest"
+  /complaints:
+    get:
+      operationId: listComplaints
+      tags: [complaints]
+      summary: List user complaints
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Complaints
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Complaint"
+    post:
+      operationId: createComplaint
+      tags: [complaints]
+      summary: Lodge a complaint
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplaintInput"
+      responses:
+        "201":
+          description: Complaint lodged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Complaint"
+  /account/profile:
+    get:
+      operationId: getProfile
+      tags: [account]
+      summary: Get the signed-in user's profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+    put:
+      operationId: updateProfile
+      tags: [account]
+      summary: Create or update the signed-in user's profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Profile"
+  /pricing/quote:
+    post:
+      operationId: calculateFees
+      tags: [payments]
+      summary: Calculate property transaction fees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeeQuoteInput"
+      responses:
+        "200":
+          description: Fee quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeeQuote"
+  /installments/quote:
+    post:
+      operationId: calculateInstallments
+      tags: [payments]
+      summary: Calculate an installment plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallmentQuoteInput"
+      responses:
+        "200":
+          description: Installment plan
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstallmentQuote"
+  /payments/initialize:
+    post:
+      operationId: initializePayment
+      tags: [payments]
+      summary: Initialize a Paystack test checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Checkout initialization result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentResult"
+  /payments/webhook:
+    post:
+      operationId: receivePaystackWebhook
+      tags: [payments]
+      summary: Verify Paystack test events
+      parameters:
+        - in: header
+          name: x-paystack-signature
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaystackWebhookInput"
+      responses:
+        "200":
+          description: Event accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaystackWebhookResult"
+  /legal/tenancy-agreement:
+    post:
+      operationId: createTenancyAgreement
+      tags: [account]
+      summary: Create a tenancy agreement draft for review
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgreementInput"
+      responses:
+        "201":
+          description: Agreement draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agreement"
+  /admin/dashboard:
+    get:
+      operationId: getAdminDashboard
+      tags: [admin]
+      summary: Admin operational overview
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Admin dashboard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDashboard"
+  /admin/queues/delistings:
+    get:
+      operationId: listAdminDelistingQueue
+      tags: [admin]
+      summary: List delisting requests awaiting admin review
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Delisting review queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminDelistingQueue"
+  /admin/queues/kyc:
+    get:
+      operationId: listAdminKycQueue
+      tags: [admin]
+      summary: List pending account verification requests
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: KYC review queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminKycQueue"
+  /admin/queues/escrow:
+    get:
+      operationId: listAdminEscrowQueue
+      tags: [admin]
+      summary: List held escrow records
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Held escrow queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminEscrowQueue"
+  /admin/delisting-requests/{requestId}/review:
+    post:
+      operationId: reviewPropertyDelisting
+      tags: [admin]
+      summary: Approve or reject a delisting request
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DelistingReviewInput"
+      responses:
+        "200":
+          description: Delisting request reviewed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+  /admin/complaints/{complaintId}:
+    patch:
+      operationId: updateComplaintStatus
+      tags: [admin]
+      summary: Update complaint investigation status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: complaintId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComplaintReviewInput"
+      responses:
+        "200":
+          description: Complaint status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+  /admin/kyc/{profileId}/review:
+    post:
+      operationId: reviewKyc
+      tags: [admin]
+      summary: Approve or reject a KYC submission
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: profileId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycReviewInput"
+      responses:
+        "200":
+          description: KYC review saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+  /admin/escrow/{transactionId}/release:
+    post:
+      operationId: releaseEscrow
+      tags: [admin]
+      summary: Release escrow after verification and user confirmation
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: transactionId
+          required: true
+          schema:
+            type: string
+      responses:
+        "409":
+          description: Escrow release is disabled pending compliance approval
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    PropertyId:
+      in: path
+      name: propertyId
+      required: true
+      schema:
+        type: string
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
-
+    PublicConfig:
+      type: object
+      required: [supabaseUrl, supabaseAnonKey, googleMapsApiKey, paystackPublicKey, paymentMode]
+      properties:
+        supabaseUrl:
+          type: string
+        supabaseAnonKey:
+          type: string
+        googleMapsApiKey:
+          type: string
+        paystackPublicKey:
+          type: string
+        paymentMode:
+          type: string
+          enum: [test, disabled]
+    PropertyCategory:
+      type: string
+      enum: [land, home, warehouse, complex, shopping_mall, hotel, school, hospital, filling_station, multipurpose_hall, custom]
+    PinStatus:
+      type: string
+      enum: [verified, pending, dispute, tenant_protected]
+    Property:
+      type: object
+      required: [id, title, category, state, town, priceNaira, intent, pinStatus, isExclusive, isLocked]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        category: { $ref: "#/components/schemas/PropertyCategory" }
+        customType: { type: string }
+        state: { type: string }
+        town: { type: string }
+        address: { type: string }
+        description: { type: string }
+        priceNaira: { type: integer, minimum: 0 }
+        priceUnit: { type: string }
+        intent: { type: string, enum: [sale, rent, social] }
+        bedrooms: { type: integer, minimum: 0 }
+        bathrooms: { type: integer, minimum: 0 }
+        sizeSqm: { type: integer, minimum: 0 }
+        latitude: { type: number }
+        longitude: { type: number }
+        imageUrl: { type: string }
+        pinStatus: { $ref: "#/components/schemas/PinStatus" }
+        isManaged: { type: boolean }
+        isExclusive: { type: boolean }
+        isLocked: { type: boolean }
+        premisesRulesUrl: { type: string }
+    PropertyInput:
+      type: object
+      required: [title, category, state, town, priceNaira, intent, latitude, longitude]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 120 }
+        category: { $ref: "#/components/schemas/PropertyCategory" }
+        customType: { type: string }
+        state: { type: string }
+        town: { type: string }
+        address: { type: string }
+        description: { type: string }
+        priceNaira: { type: integer, minimum: 1 }
+        priceUnit: { type: string }
+        intent: { type: string, enum: [sale, rent, social] }
+        bedrooms: { type: integer, minimum: 0 }
+        bathrooms: { type: integer, minimum: 0 }
+        sizeSqm: { type: integer, minimum: 0 }
+        latitude: { type: number }
+        longitude: { type: number }
+        imageUrl: { type: string }
+        premisesRulesUrl: { type: string }
+    Dashboard:
+      type: object
+      required: [items, location, greeting]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Property" }
+        location: { type: string }
+        greeting: { type: string }
+    SocialHousingUnit:
+      type: object
+      required: [id, parentPropertyId, propertyTitle, unitType, unitPriceNaira, status]
+      properties:
+        id: { type: string }
+        parentPropertyId: { type: string }
+        propertyTitle: { type: string }
+        unitType: { type: string }
+        unitPriceNaira: { type: integer, minimum: 0 }
+        town: { type: string }
+        imageUrl: { type: string }
+        status: { type: string, enum: [available, reserved, sold] }
+    SpecialRequest:
+      type: object
+      required: [id, requestType, desiredTown, desiredLga, desiredState, budgetNaira, urgency, status]
+      properties:
+        id: { type: string }
+        requestType: { type: string, enum: [custom_category, location_sourcing] }
+        customCategory: { type: string }
+        desiredTown: { type: string }
+        desiredLga: { type: string }
+        desiredState: { type: string }
+        neighborhood: { type: string }
+        budgetNaira: { type: integer }
+        urgency: { type: string, enum: [standard, urgent] }
+        latitude: { type: number }
+        longitude: { type: number }
+        status: { type: string, enum: [open, assigned, sourced, closed] }
+        createdAt: { type: string, format: date-time }
+    SpecialRequestInput:
+      type: object
+      required: [requestType, desiredTown, desiredLga, desiredState, budgetNaira, urgency]
+      properties:
+        requestType: { type: string, enum: [custom_category, location_sourcing] }
+        customCategory: { type: string }
+        desiredTown: { type: string }
+        desiredLga: { type: string }
+        desiredState: { type: string }
+        neighborhood: { type: string }
+        budgetNaira: { type: integer, minimum: 1 }
+        urgency: { type: string, enum: [standard, urgent] }
+        latitude: { type: number }
+        longitude: { type: number }
+    Complaint:
+      type: object
+      required: [id, against, complaintType, description, status, createdAt]
+      properties:
+        id: { type: string }
+        against: { type: string, enum: [landlord, agent, tenant, attorney] }
+        complaintType: { type: string, enum: [harassment, agent_misconduct, breach_of_rules, service_failure] }
+        description: { type: string }
+        propertyId: { type: string }
+        evidenceUrls:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [lodged, investigating, resolved] }
+        createdAt: { type: string, format: date-time }
+    ComplaintInput:
+      type: object
+      required: [against, complaintType, description]
+      properties:
+        against: { type: string, enum: [landlord, agent, tenant, attorney] }
+        complaintType: { type: string, enum: [harassment, agent_misconduct, breach_of_rules, service_failure] }
+        description: { type: string, minLength: 10, maxLength: 4000 }
+        propertyId: { type: string }
+        evidenceUrls:
+          type: array
+          items: { type: string }
+          maxItems: 8
+    Profile:
+      type: object
+      required: [id, role, fullName, email]
+      properties:
+        id: { type: string }
+        role: { type: string, enum: [client, landlord, agent, attorney, admin] }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        country: { type: string }
+        state: { type: string }
+        lga: { type: string }
+        town: { type: string }
+        villageOfOrigin: { type: string }
+        verificationStatus: { type: string, enum: [unverified, pending, verified, rejected] }
+        nbaSealNumber: { type: string }
+        bankName: { type: string }
+        bankAccountLast4: { type: string }
+    ProfileInput:
+      type: object
+      required: [role, fullName, phone, state, town]
+      properties:
+        role: { type: string, enum: [client, landlord, agent, attorney] }
+        fullName: { type: string, minLength: 2, maxLength: 160 }
+        phone: { type: string, maxLength: 30 }
+        country: { type: string }
+        state: { type: string }
+        lga: { type: string }
+        town: { type: string }
+        villageOfOrigin: { type: string }
+        nbaSealNumber: { type: string }
+        bankName: { type: string }
+        bankAccountLast4: { type: string, maxLength: 4 }
+    FeeQuoteInput:
+      type: object
+      required: [transactionType, amountNaira, isManaged, isDirectLandlord]
+      properties:
+        transactionType: { type: string, enum: [sale, rent_year_one, rent_renewal, rent_micro_installment, social_housing] }
+        amountNaira: { type: integer, minimum: 1 }
+        isManaged: { type: boolean }
+        isDirectLandlord: { type: boolean }
+    FeeQuote:
+      type: object
+      required: [buyerPaysNaira, landlordPaysNaira, platformFeeNaira, agentFeeNaira, landlordReceivesNaira]
+      properties:
+        buyerPaysNaira: { type: integer }
+        landlordPaysNaira: { type: integer }
+        platformFeeNaira: { type: integer }
+        agentFeeNaira: { type: integer }
+        landlordReceivesNaira: { type: integer }
+        note: { type: string }
+    InstallmentQuoteInput:
+      type: object
+      required: [amountNaira, count]
+      properties:
+        amountNaira: { type: integer, minimum: 1 }
+        count: { type: integer, minimum: 2, maximum: 4 }
+    InstallmentQuote:
+      type: object
+      required: [items, totalNaira]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [number, amountNaira]
+            properties:
+              number: { type: integer }
+              amountNaira: { type: integer }
+        totalNaira: { type: integer }
+    PaymentInput:
+      type: object
+      required: [transactionId]
+      properties:
+        transactionId: { type: string }
+    TransactionInput:
+      type: object
+      required: [propertyId, paymentMode]
+      properties:
+        propertyId: { type: string }
+        socialHousingUnitId: { type: string }
+        paymentMode: { type: string, enum: [full, installments, daily, weekly, monthly] }
+        installmentCount: { type: integer, minimum: 2, maximum: 4 }
+    Transaction:
+      type: object
+      required: [id, propertyId, totalNaira, platformFeeNaira, agentFeeNaira, status, escrowHeld]
+      properties:
+        id: { type: string }
+        propertyId: { type: string }
+        totalNaira: { type: integer }
+        platformFeeNaira: { type: integer }
+        agentFeeNaira: { type: integer }
+        status: { type: string, enum: [pending, paid, completed, cancelled] }
+        escrowHeld: { type: boolean }
+    PaystackWebhookInput:
+      type: object
+      required: [event, data]
+      properties:
+        event: { type: string }
+        data:
+          type: object
+          properties:
+            reference: { type: string }
+            status: { type: string }
+            amount: { type: integer }
+    PaystackWebhookResult:
+      type: object
+      required: [received]
+      properties:
+        received: { type: boolean }
+    DelistingReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        adminNote: { type: string, maxLength: 1000 }
+    ComplaintReviewInput:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [investigating, resolved] }
+        adminResolution: { type: string, maxLength: 2000 }
+    KycReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [verified, rejected] }
+        adminNote: { type: string, maxLength: 1000 }
+    PaymentResult:
+      type: object
+      required: [reference, authorizationUrl, mode]
+      properties:
+        reference: { type: string }
+        authorizationUrl: { type: string }
+        mode: { type: string, enum: [test] }
+    AgreementInput:
+      type: object
+      required: [propertyId, tenantName, landlordName, rentNaira, paymentMode, mediationAccepted]
+      properties:
+        propertyId: { type: string }
+        tenantName: { type: string }
+        landlordName: { type: string }
+        rentNaira: { type: integer, minimum: 1 }
+        paymentMode: { type: string, enum: [full, installments, daily, weekly, monthly] }
+        premisesRulesUrl: { type: string }
+        mediationAccepted: { type: boolean }
+    Agreement:
+      type: object
+      required: [id, status, reviewNotice]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [draft] }
+        reviewNotice: { type: string }
+    StatusResult:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    AdminDashboard:
+      type: object
+      required: [pendingKyc, pendingDelistings, openComplaints, heldEscrows, openRequests, attorneyReviews]
+      properties:
+        pendingKyc: { type: integer }
+        pendingDelistings: { type: integer }
+        openComplaints: { type: integer }
+        heldEscrows: { type: integer }
+        openRequests: { type: integer }
+        attorneyReviews: { type: integer }
+    AdminDelistingQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, propertyId, propertyTitle, town, requestedBy, createdAt]
+            properties:
+              id: { type: string }
+              propertyId: { type: string }
+              propertyTitle: { type: string }
+              town: { type: string }
+              requestedBy: { type: string }
+              createdAt: { type: string, format: date-time }
+    AdminKycQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [profileId, fullName, role, status, createdAt]
+            properties:
+              profileId: { type: string }
+              fullName: { type: string }
+              email: { type: string }
+              role: { type: string, enum: [landlord, agent, attorney] }
+              status: { type: string, enum: [pending, verified, rejected] }
+              nbaSealNumber: { type: string }
+              createdAt: { type: string, format: date-time }
+    AdminEscrowQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [transactionId, propertyTitle, heldAmountNaira, isReleased, createdAt]
+            properties:
+              transactionId: { type: string }
+              propertyTitle: { type: string }
+              heldAmountNaira: { type: integer }
+              isReleased: { type: boolean }
+              createdAt: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }

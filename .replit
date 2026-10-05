@@ -18,3 +18,8 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+PAYSTACK_PUBLIC_KEY = "pk_test_e80fbdd42f4e9b967de0bcacbb0c09dd7"
