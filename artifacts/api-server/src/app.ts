@@ -48,10 +48,16 @@ app.use(
     req.log.error({ error }, "Unhandled API error");
     if (
       error instanceof SupabaseRequestError &&
-      (error.code === "PGRST205" || error.code === "42P01")
+      (error.code === "PGRST205" ||
+        error.code === "PGRST202" ||
+        error.code === "PGRST125" ||
+        error.code === "42P01")
     ) {
       res.status(503).json({
-        message: "Estatehold database setup is incomplete. Apply the Supabase migration first.",
+        message:
+          error.code === "PGRST125"
+            ? "Supabase rejected the API URL. Set SUPABASE_URL to the project URL, not an API endpoint."
+            : "Estatehold database setup is incomplete. Apply the Supabase migration first.",
       });
       return;
     }

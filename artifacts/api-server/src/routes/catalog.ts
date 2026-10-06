@@ -109,6 +109,19 @@ router.post(
       res.status(400).json({ message: "Add a name for the custom property category." });
       return;
     }
+    const isAccommodation = input.category === "hotel" || input.category === "short_let";
+    if (isAccommodation && !input.hotelCacNumber?.trim()) {
+      res.status(422).json({ message: "A CAC registration number is required for hotels and short-lets." });
+      return;
+    }
+    if (isAccommodation && !input.emergencyContactPhone?.trim()) {
+      res.status(422).json({ message: "Add a public hotel reception or emergency contact number." });
+      return;
+    }
+    if (isAccommodation && !input.hotelCctvDisclosed) {
+      res.status(422).json({ message: "Confirm that any CCTV is limited to disclosed common areas, never guest rooms." });
+      return;
+    }
     if (input.intent === "rent" && !input.premisesRulesUrl?.trim()) {
       res.status(422).json({ message: "Upload the rental premises rules before posting." });
       return;
@@ -139,6 +152,13 @@ router.post(
       is_locked: false,
       is_active: true,
       premises_rules_url: input.premisesRulesUrl?.trim() || null,
+      hotel_cac_number: isAccommodation ? input.hotelCacNumber?.trim() : null,
+      emergency_contact_phone: isAccommodation ? input.emergencyContactPhone?.trim() : null,
+      hotel_has_24_hour_reception: isAccommodation && Boolean(input.hotelHas24HourReception),
+      hotel_cctv_common_areas: isAccommodation && Boolean(input.hotelCctvCommonAreas),
+      hotel_cctv_disclosed: isAccommodation && Boolean(input.hotelCctvDisclosed),
+      hotel_safety_checkin_available: isAccommodation && Boolean(input.hotelSafetyCheckinAvailable),
+      hotel_verification_status: isAccommodation ? "pending" : "not_applicable",
     };
     const rows = await supabaseRest<DbProperty[]>("properties?select=*", {
       method: "POST",

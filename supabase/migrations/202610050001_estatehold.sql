@@ -33,7 +33,7 @@ create table if not exists public.properties (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid references public.profiles(id) on delete set null,
   title text not null,
-  category text not null check (category in ('land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom')),
+  category text not null check (category in ('land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom')),
   custom_type text,
   state text not null,
   lga text not null default '',
@@ -55,9 +55,28 @@ create table if not exists public.properties (
   is_locked boolean not null default false,
   is_active boolean not null default true,
   premises_rules_url text,
+  hotel_cac_number text,
+  emergency_contact_phone text,
+  hotel_has_24_hour_reception boolean not null default false,
+  hotel_cctv_common_areas boolean not null default false,
+  hotel_cctv_disclosed boolean not null default false,
+  hotel_safety_checkin_available boolean not null default false,
+  hotel_verification_status text not null default 'not_applicable'
+    check (hotel_verification_status in ('not_applicable', 'pending', 'verified', 'rejected')),
+  hotel_verification_reviewed_at timestamptz,
+  hotel_verification_reviewed_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint custom_category_requires_type check (category <> 'custom' or nullif(trim(custom_type), '') is not null)
+  constraint custom_category_requires_type check (category <> 'custom' or nullif(trim(custom_type), '') is not null),
+  constraint accommodation_cac_number_required check (
+    category not in ('hotel', 'short_let') or nullif(trim(hotel_cac_number), '') is not null
+  ),
+  constraint accommodation_emergency_contact_required check (
+    category not in ('hotel', 'short_let') or nullif(trim(emergency_contact_phone), '') is not null
+  ),
+  constraint accommodation_cctv_disclosure_required check (
+    category not in ('hotel', 'short_let') or not hotel_cctv_common_areas or hotel_cctv_disclosed
+  )
 );
 
 create table if not exists public.social_housing_units (

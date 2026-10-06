@@ -34,4 +34,10 @@ export interface PropertyInput {
   longitude: number;
   imageUrl?: string;
   premisesRulesUrl?: string;
+  hotelCacNumber?: string;
+  emergencyContactPhone?: string;
+  hotelHas24HourReception?: boolean;
+  hotelCctvCommonAreas?: boolean;
+  hotelCctvDisclosed?: boolean;
+  hotelSafetyCheckinAvailable?: boolean;
 }

@@ -2,9 +2,13 @@ import { Router, type IRouter } from "express";
 import {
   ListAdminDelistingQueueResponse,
   ListAdminEscrowQueueResponse,
+  ListAdminHotelVerificationQueueResponse,
   ListAdminKycQueueResponse,
   GetAdminDashboardResponse,
   ReleaseEscrowParams,
+  ReviewHotelVerificationBody,
+  ReviewHotelVerificationParams,
+  ReviewHotelVerificationResponse,
   ReviewKycBody,
   ReviewKycParams,
   ReviewPropertyDelistingBody,
@@ -130,6 +134,67 @@ router.get("/admin/queues/escrow", requireAuth, async (req, res): Promise<void> 
   });
   res.json(ListAdminEscrowQueueResponse.parse({ items }));
 });
+
+router.get("/admin/queues/hotels", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const query = new URLSearchParams({
+    select: "id,title,category,state,town,hotel_cac_number,emergency_contact_phone,created_at",
+    category: "in.(hotel,short_let)",
+    hotel_verification_status: "eq.pending",
+    order: "created_at.asc",
+    limit: "250",
+  });
+  const rows = await supabaseRest<DbRow[]>(`properties?${query}`);
+  const items = rows.map((row) => ({
+    propertyId: String(row["id"]),
+    title: String(row["title"]),
+    category: String(row["category"]),
+    state: String(row["state"]),
+    town: String(row["town"]),
+    cacNumber: String(row["hotel_cac_number"] ?? ""),
+    emergencyContactPhone: String(row["emergency_contact_phone"] ?? ""),
+    createdAt: String(row["created_at"]),
+  }));
+  res.json(ListAdminHotelVerificationQueueResponse.parse({ items }));
+});
+
+router.post(
+  "/admin/hotels/:propertyId/review",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    if (!(await requireRoles(req, res, ["admin"]))) return;
+    const params = ReviewHotelVerificationParams.safeParse(req.params);
+    const body = ReviewHotelVerificationBody.safeParse(req.body);
+    if (!params.success || !body.success) {
+      res.status(400).json({ message: "Choose a valid hotel verification decision." });
+      return;
+    }
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const reviewedAt = new Date().toISOString();
+    const query = new URLSearchParams({
+      select: "id",
+      id: `eq.${params.data.propertyId}`,
+      category: "in.(hotel,short_let)",
+      hotel_verification_status: "eq.pending",
+    });
+    const rows = await supabaseRest<DbRow[]>(`properties?${query}`, {
+      method: "PATCH",
+      body: {
+        hotel_verification_status: body.data.decision,
+        hotel_verification_reviewed_at: reviewedAt,
+        hotel_verification_reviewed_by: user.id,
+        updated_at: reviewedAt,
+      },
+      prefer: "return=representation",
+    });
+    if (!rows.length) {
+      res.status(404).json({ message: "Pending hotel verification not found." });
+      return;
+    }
+    res.json(ReviewHotelVerificationResponse.parse({ status: body.data.decision }));
+  },
+);
 
 router.post(
   "/admin/delisting-requests/:requestId/review",

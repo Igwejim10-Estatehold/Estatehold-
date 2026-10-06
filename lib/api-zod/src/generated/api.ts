@@ -45,7 +45,7 @@ export const GetDashboardResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -64,7 +64,13 @@ export const GetDashboardResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
-  "premisesRulesUrl": zod.string().optional()
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
 })),
   "location": zod.string(),
   "greeting": zod.string()
@@ -75,7 +81,7 @@ export const GetDashboardResponse = zod.object({
  * @summary Browse properties
  */
 export const ListPropertiesQueryParams = zod.object({
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']).optional(),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']).optional(),
   "intent": zod.enum(['sale', 'rent', 'social']).optional(),
   "search": zod.coerce.string().optional(),
   "state": zod.coerce.string().optional(),
@@ -96,7 +102,7 @@ export const ListPropertiesResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -115,7 +121,13 @@ export const ListPropertiesResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
-  "premisesRulesUrl": zod.string().optional()
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
 }))
 })
 
@@ -137,7 +149,7 @@ export const createPropertyBodySizeSqmMin = 0;
 
 export const CreatePropertyBody = zod.object({
   "title": zod.string().min(createPropertyBodyTitleMin).max(createPropertyBodyTitleMax),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -152,7 +164,13 @@ export const CreatePropertyBody = zod.object({
   "latitude": zod.number(),
   "longitude": zod.number(),
   "imageUrl": zod.string().optional(),
-  "premisesRulesUrl": zod.string().optional()
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelCacNumber": zod.string().optional(),
+  "emergencyContactPhone": zod.string().optional(),
+  "hotelHas24HourReception": zod.boolean().optional(),
+  "hotelCctvCommonAreas": zod.boolean().optional(),
+  "hotelCctvDisclosed": zod.boolean().optional(),
+  "hotelSafetyCheckinAvailable": zod.boolean().optional()
 })
 
 export const createPropertyResponsePriceNairaMin = 0;
@@ -168,7 +186,7 @@ export const createPropertyResponseSizeSqmMin = 0;
 export const CreatePropertyResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -187,7 +205,13 @@ export const CreatePropertyResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
-  "premisesRulesUrl": zod.string().optional()
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
 })
 
 
@@ -211,7 +235,7 @@ export const getPropertyResponseSizeSqmMin = 0;
 export const GetPropertyResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -230,7 +254,13 @@ export const GetPropertyResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
-  "premisesRulesUrl": zod.string().optional()
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
 })
 
 
@@ -622,6 +652,44 @@ export const ListAdminEscrowQueueResponse = zod.object({
   "isReleased": zod.boolean(),
   "createdAt": zod.coerce.date()
 }))
+})
+
+
+/**
+ * @summary List hotel and short-let listings awaiting verification
+ */
+export const ListAdminHotelVerificationQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "propertyId": zod.string(),
+  "title": zod.string(),
+  "category": zod.enum(['hotel', 'short_let']),
+  "state": zod.string(),
+  "town": zod.string(),
+  "cacNumber": zod.string(),
+  "emergencyContactPhone": zod.string(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Verify or reject a hotel or short-let listing
+ */
+export const ReviewHotelVerificationParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const reviewHotelVerificationBodyAdminNoteMax = 1000;
+
+
+
+export const ReviewHotelVerificationBody = zod.object({
+  "decision": zod.enum(['verified', 'rejected']),
+  "adminNote": zod.string().max(reviewHotelVerificationBodyAdminNoteMax).optional()
+})
+
+export const ReviewHotelVerificationResponse = zod.object({
+  "status": zod.enum(['verified', 'rejected'])
 })
 
 

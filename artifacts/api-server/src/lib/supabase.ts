@@ -26,7 +26,11 @@ function requiredEnv(key: string): string {
 }
 
 export function getSupabaseUrl(): string {
-  return requiredEnv("SUPABASE_URL").replace(/\/+$/, "");
+  const url = new URL(requiredEnv("SUPABASE_URL"));
+  const path = url.pathname
+    .replace(/\/(?:rest\/v1|auth\/v1|storage\/v1)\/?$/i, "")
+    .replace(/\/+$/, "");
+  return `${url.origin}${path}`;
 }
 
 export function getSupabaseAnonKey(): string {

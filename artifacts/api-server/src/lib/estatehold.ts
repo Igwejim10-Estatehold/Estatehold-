@@ -51,6 +51,18 @@ export function mapProperty(row: DbProperty) {
     isLocked: row.is_locked,
     premisesRulesUrl:
       typeof row["premises_rules_url"] === "string" ? row["premises_rules_url"] : undefined,
+    hotelVerificationStatus:
+      typeof row["hotel_verification_status"] === "string"
+        ? row["hotel_verification_status"]
+        : "not_applicable",
+    hotelHas24HourReception: Boolean(row["hotel_has_24_hour_reception"]),
+    hotelCctvCommonAreas: Boolean(row["hotel_cctv_common_areas"]),
+    hotelCctvDisclosed: Boolean(row["hotel_cctv_disclosed"]),
+    hotelSafetyCheckinAvailable: Boolean(row["hotel_safety_checkin_available"]),
+    emergencyContactPhone:
+      typeof row["emergency_contact_phone"] === "string"
+        ? row["emergency_contact_phone"]
+        : undefined,
   };
 }
 

@@ -447,6 +447,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminEscrowQueue"
+  /admin/queues/hotels:
+    get:
+      operationId: listAdminHotelVerificationQueue
+      tags: [admin]
+      summary: List hotel and short-let listings awaiting verification
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending hotel verification queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminHotelVerificationQueue"
+  /admin/hotels/{propertyId}/review:
+    post:
+      operationId: reviewHotelVerification
+      tags: [admin]
+      summary: Verify or reject a hotel or short-let listing
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: propertyId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HotelVerificationReviewInput"
+      responses:
+        "200":
+          description: Hotel verification review result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HotelVerificationReviewResponse"
   /admin/delisting-requests/{requestId}/review:
     post:
       operationId: reviewPropertyDelisting
@@ -579,13 +618,13 @@ components:
           enum: [test, disabled]
     PropertyCategory:
       type: string
-      enum: [land, home, warehouse, complex, shopping_mall, hotel, school, hospital, filling_station, multipurpose_hall, custom]
+      enum: [land, home, warehouse, complex, shopping_mall, hotel, short_let, school, hospital, filling_station, multipurpose_hall, custom]
     PinStatus:
       type: string
       enum: [verified, pending, dispute, tenant_protected]
     Property:
       type: object
-      required: [id, title, category, state, town, priceNaira, intent, pinStatus, isExclusive, isLocked]
+      required: [id, title, category, state, town, priceNaira, intent, pinStatus, isExclusive, isLocked, hotelVerificationStatus, hotelHas24HourReception, hotelCctvCommonAreas, hotelCctvDisclosed, hotelSafetyCheckinAvailable]
       properties:
         id: { type: string }
         title: { type: string }
@@ -609,6 +648,12 @@ components:
         isExclusive: { type: boolean }
         isLocked: { type: boolean }
         premisesRulesUrl: { type: string }
+        hotelVerificationStatus: { type: string, enum: [not_applicable, pending, verified, rejected] }
+        hotelHas24HourReception: { type: boolean }
+        hotelCctvCommonAreas: { type: boolean }
+        hotelCctvDisclosed: { type: boolean }
+        hotelSafetyCheckinAvailable: { type: boolean }
+        emergencyContactPhone: { type: string }
     PropertyInput:
       type: object
       required: [title, category, state, town, priceNaira, intent, latitude, longitude]
@@ -630,6 +675,12 @@ components:
         longitude: { type: number }
         imageUrl: { type: string }
         premisesRulesUrl: { type: string }
+        hotelCacNumber: { type: string }
+        emergencyContactPhone: { type: string }
+        hotelHas24HourReception: { type: boolean }
+        hotelCctvCommonAreas: { type: boolean }
+        hotelCctvDisclosed: { type: boolean }
+        hotelSafetyCheckinAvailable: { type: boolean }
     Dashboard:
       type: object
       required: [items, location, greeting]
@@ -924,6 +975,35 @@ components:
               heldAmountNaira: { type: integer }
               isReleased: { type: boolean }
               createdAt: { type: string, format: date-time }
+    AdminHotelVerificationQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [propertyId, title, category, state, town, cacNumber, emergencyContactPhone, createdAt]
+            properties:
+              propertyId: { type: string }
+              title: { type: string }
+              category: { type: string, enum: [hotel, short_let] }
+              state: { type: string }
+              town: { type: string }
+              cacNumber: { type: string }
+              emergencyContactPhone: { type: string }
+              createdAt: { type: string, format: date-time }
+    HotelVerificationReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [verified, rejected] }
+        adminNote: { type: string, maxLength: 1000 }
+    HotelVerificationReviewResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [verified, rejected] }
     Error:
       type: object
       required: [message]

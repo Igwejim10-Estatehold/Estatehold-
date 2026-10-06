@@ -35,6 +35,7 @@ export const PropertyCategory = {
   complex: 'complex',
   shopping_mall: 'shopping_mall',
   hotel: 'hotel',
+  short_let: 'short_let',
   school: 'school',
   hospital: 'hospital',
   filling_station: 'filling_station',
@@ -59,6 +60,16 @@ export const PropertyIntent = {
   sale: 'sale',
   rent: 'rent',
   social: 'social',
+} as const;
+
+export type PropertyHotelVerificationStatus = typeof PropertyHotelVerificationStatus[keyof typeof PropertyHotelVerificationStatus];
+
+
+export const PropertyHotelVerificationStatus = {
+  not_applicable: 'not_applicable',
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
 } as const;
 
 export interface Property {
@@ -88,6 +99,12 @@ export interface Property {
   isExclusive: boolean;
   isLocked: boolean;
   premisesRulesUrl?: string;
+  hotelVerificationStatus: PropertyHotelVerificationStatus;
+  hotelHas24HourReception: boolean;
+  hotelCctvCommonAreas: boolean;
+  hotelCctvDisclosed: boolean;
+  hotelSafetyCheckinAvailable: boolean;
+  emergencyContactPhone?: string;
 }
 
 export type PropertyInputIntent = typeof PropertyInputIntent[keyof typeof PropertyInputIntent];
@@ -125,6 +142,12 @@ export interface PropertyInput {
   longitude: number;
   imageUrl?: string;
   premisesRulesUrl?: string;
+  hotelCacNumber?: string;
+  emergencyContactPhone?: string;
+  hotelHas24HourReception?: boolean;
+  hotelCctvCommonAreas?: boolean;
+  hotelCctvDisclosed?: boolean;
+  hotelSafetyCheckinAvailable?: boolean;
 }
 
 export interface Dashboard {
@@ -634,6 +657,55 @@ export type AdminEscrowQueueItemsItem = {
 
 export interface AdminEscrowQueue {
   items: AdminEscrowQueueItemsItem[];
+}
+
+export type AdminHotelVerificationQueueItemsItemCategory = typeof AdminHotelVerificationQueueItemsItemCategory[keyof typeof AdminHotelVerificationQueueItemsItemCategory];
+
+
+export const AdminHotelVerificationQueueItemsItemCategory = {
+  hotel: 'hotel',
+  short_let: 'short_let',
+} as const;
+
+export type AdminHotelVerificationQueueItemsItem = {
+  propertyId: string;
+  title: string;
+  category: AdminHotelVerificationQueueItemsItemCategory;
+  state: string;
+  town: string;
+  cacNumber: string;
+  emergencyContactPhone: string;
+  createdAt: string;
+};
+
+export interface AdminHotelVerificationQueue {
+  items: AdminHotelVerificationQueueItemsItem[];
+}
+
+export type HotelVerificationReviewInputDecision = typeof HotelVerificationReviewInputDecision[keyof typeof HotelVerificationReviewInputDecision];
+
+
+export const HotelVerificationReviewInputDecision = {
+  verified: 'verified',
+  rejected: 'rejected',
+} as const;
+
+export interface HotelVerificationReviewInput {
+  decision: HotelVerificationReviewInputDecision;
+  /** @maxLength 1000 */
+  adminNote?: string;
+}
+
+export type HotelVerificationReviewResponseStatus = typeof HotelVerificationReviewResponseStatus[keyof typeof HotelVerificationReviewResponseStatus];
+
+
+export const HotelVerificationReviewResponseStatus = {
+  verified: 'verified',
+  rejected: 'rejected',
+} as const;
+
+export interface HotelVerificationReviewResponse {
+  status: HotelVerificationReviewResponseStatus;
 }
 
 export interface Error {

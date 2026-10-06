@@ -16,6 +16,7 @@ export const PropertyCategory = {
   complex: 'complex',
   shopping_mall: 'shopping_mall',
   hotel: 'hotel',
+  short_let: 'short_let',
   school: 'school',
   hospital: 'hospital',
   filling_station: 'filling_station',

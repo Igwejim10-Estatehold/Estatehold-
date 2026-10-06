@@ -23,6 +23,7 @@ import type {
   AdminDashboard,
   AdminDelistingQueue,
   AdminEscrowQueue,
+  AdminHotelVerificationQueue,
   AdminKycQueue,
   Agreement,
   AgreementInput,
@@ -35,6 +36,8 @@ import type {
   FeeQuote,
   FeeQuoteInput,
   HealthStatus,
+  HotelVerificationReviewInput,
+  HotelVerificationReviewResponse,
   InstallmentQuote,
   InstallmentQuoteInput,
   KycReviewInput,
@@ -2047,6 +2050,172 @@ export function useListAdminEscrowQueue<TData = Awaited<ReturnType<typeof listAd
 
 
 
+
+export const getListAdminHotelVerificationQueueUrl = () => {
+
+
+
+
+  return `/api/admin/queues/hotels`
+}
+
+/**
+ * @summary List hotel and short-let listings awaiting verification
+ */
+export const listAdminHotelVerificationQueue = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminHotelVerificationQueue> => {
+
+  return customFetch<AdminHotelVerificationQueue>(getListAdminHotelVerificationQueueUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminHotelVerificationQueueQueryKey = () => {
+    return [
+    `/api/admin/queues/hotels`
+    ] as const;
+    }
+
+
+export const getListAdminHotelVerificationQueueQueryOptions = <TData = Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminHotelVerificationQueueQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>> = ({ signal }) => listAdminHotelVerificationQueue({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminHotelVerificationQueueQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>>
+export type ListAdminHotelVerificationQueueQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List hotel and short-let listings awaiting verification
+ */
+
+export function useListAdminHotelVerificationQueue<TData = Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminHotelVerificationQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminHotelVerificationQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewHotelVerificationUrl = (propertyId: string,) => {
+
+
+
+
+  return `/api/admin/hotels/${propertyId}/review`
+}
+
+/**
+ * @summary Verify or reject a hotel or short-let listing
+ */
+export const reviewHotelVerification = async (propertyId: string,
+    hotelVerificationReviewInput: HotelVerificationReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<HotelVerificationReviewResponse> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<HotelVerificationReviewResponse>(getReviewHotelVerificationUrl(propertyId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(hotelVerificationReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewHotelVerificationMutationKey = () => ['reviewHotelVerification'] as const;
+
+export const getReviewHotelVerificationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewHotelVerification>>, TError,ReviewHotelVerificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewHotelVerification>>, TError,ReviewHotelVerificationMutationVariables, TContext> => {
+
+const mutationKey = getReviewHotelVerificationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewHotelVerification>>, ReviewHotelVerificationMutationVariables> = (props) => {
+          const {propertyId,data} = props ?? {};
+
+          return  reviewHotelVerification(propertyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewHotelVerificationMutationResult = NonNullable<Awaited<ReturnType<typeof reviewHotelVerification>>>
+    export type ReviewHotelVerificationMutationBody = BodyType<HotelVerificationReviewInput>
+    export type ReviewHotelVerificationMutationError = ErrorType<unknown>
+    export type ReviewHotelVerificationMutationVariables = {propertyId: string;data: BodyType<HotelVerificationReviewInput>}
+
+    /**
+ * @summary Verify or reject a hotel or short-let listing
+ */
+export const useReviewHotelVerification = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewHotelVerification>>, TError,ReviewHotelVerificationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewHotelVerification>>,
+        TError,
+        ReviewHotelVerificationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReviewHotelVerificationMutationOptions(options));
+    }
 
 export const getReviewPropertyDelistingUrl = (requestId: string,) => {
 
