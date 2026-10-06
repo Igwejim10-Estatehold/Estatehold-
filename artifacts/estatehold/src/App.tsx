@@ -39,11 +39,8 @@ const timeGreeting = () => {
   return hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 };
 function LogoMark({ small = false }: { small?: boolean }) {
-  return <span className={`inline-flex items-center justify-center rounded-xl bg-[#16A34A] text-white ${small ? 'h-8 w-8' : 'h-10 w-10'}`} aria-label="Estatehold logo">
-    <svg width={small ? 19 : 23} height={small ? 19 : 23} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3.5 11.1 12 4l8.5 7.1v8.4a.9.9 0 0 1-.9.9h-5.2v-6.1H9.6v6.1H4.4a.9.9 0 0 1-.9-.9v-8.4Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round"/>
-      <path d="m8.7 10.9 2.2 2.2 4.6-4.8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
+  return <span className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ${small ? 'h-8 w-8' : 'h-10 w-10'}`} aria-label="Estatehold logo">
+    <img src="/Public/estatehold-logo.png" alt="Estatehold logo" className="h-full w-full object-contain" draggable={false}/>
   </span>;
 }
 function Field({ label, name, type = 'text', placeholder, required = false, defaultValue, min, step, readOnly = false }: {
