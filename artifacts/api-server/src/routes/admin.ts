@@ -18,7 +18,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth, requireRoles, requireUser } from "../lib/auth";
 import { type DbRow } from "../lib/estatehold";
-import { supabaseRest } from "../lib/supabase";
+import { supabaseRest, supabaseRpc } from "../lib/supabase";
 
 const router: IRouter = Router();
 
@@ -369,24 +369,34 @@ router.post(
       return;
     }
     const user = await requireUser(req, res);
-    req.log.warn(
-      { adminId: user?.id, transactionId: params.data.transactionId },
-      "Escrow release requested while compliance lock is active",
-    );
-    res.status(409).json({
-      message:
-        "Escrow release is disabled until the transaction, payout, and compliance process has been reviewed and approved.",
-    });
+    if (!user) return;
+    try {
+      await supabaseRpc("release_estatehold_escrow", {
+        p_transaction_id: params.data.transactionId,
+        p_admin_id: user.id,
+      });
+      res.json({ released: true });
+    } catch (error) {
+      req.log.info(
+        { adminId: user.id, transactionId: params.data.transactionId, error },
+        "Escrow release requirements were not satisfied",
+      );
+      res.status(409).json({
+        message:
+          "Release requires fully paid funds, buyer confirmation, and this administrator’s compliance approval.",
+      });
+    }
   },
 );
 
 router.get("/admin/workspace-data", requireAuth, async (req, res): Promise<void> => {
   if (!(await requireRoles(req, res, ["admin"]))) return;
-  const [agents, users, properties, payments] = await Promise.all([
+  const [agents, users, properties, payments, agentPayouts] = await Promise.all([
     supabaseRest<DbRow[]>("profiles?select=id,full_name,email,phone,town,agency_name,verification_status&role=eq.agent&limit=500"),
     supabaseRest<DbRow[]>("profiles?select=id,full_name,email,role,verification_status&limit=500"),
     supabaseRest<DbRow[]>("properties?select=id,title,category,state,town,listing_moderation_status,is_active&order=created_at.desc&limit=500"),
     supabaseRest<DbRow[]>("transactions?select=id,status,amount_naira,agent_fee_naira,platform_fee_naira,created_at&order=created_at.desc&limit=500"),
+    supabaseRest<DbRow[]>("agent_commission_payouts?select=id,transaction_id,agent_id,amount_naira,status,approved_at,transfer_reference,transfer_code,recipient_bank_name,recipient_account_last4,provider_status,failure_message,attempt_started_at,last_reconciled_at,completed_at,created_at,updated_at&order=created_at.desc&limit=500"),
   ]);
   res.json({
     agents: agents.map((row) => ({
@@ -404,6 +414,20 @@ router.get("/admin/workspace-data", requireAuth, async (req, res): Promise<void>
     payments: payments.map((row) => ({
       id: row["id"], status: row["status"], amountNaira: row["amount_naira"],
       agentFeeNaira: row["agent_fee_naira"], platformFeeNaira: row["platform_fee_naira"],
+      createdAt: row["created_at"],
+    })),
+    agentPayouts: agentPayouts.map((row) => ({
+      id: row["id"],
+      transactionId: row["transaction_id"],
+      agentId: row["agent_id"],
+      amountNaira: row["amount_naira"],
+      status: row["status"],
+      transferReference: row["transfer_reference"],
+      transferCode: row["transfer_code"],
+      recipientBankName: row["recipient_bank_name"],
+      recipientAccountLast4: row["recipient_account_last4"],
+      providerStatus: row["provider_status"],
+      failureMessage: row["failure_message"],
       createdAt: row["created_at"],
     })),
   });

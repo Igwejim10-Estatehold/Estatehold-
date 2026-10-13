@@ -12,7 +12,8 @@ import {
 } from "@workspace/api-zod";
 import { getUserRole, requireAuth, requireUser } from "../lib/auth";
 import { loadProfile, mapProfile, type DbRow } from "../lib/estatehold";
-import { decryptPayoutDetails, encryptPayoutDetails } from "../lib/payout-encryption";
+import { encryptPayoutDetails } from "../lib/payout-encryption";
+import { loadVerifiedPayoutDestination } from "../lib/payout-destinations";
 import { supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
@@ -22,39 +23,6 @@ type PaystackBank = { name?: unknown; code?: unknown };
 function getPaystackSecret(): string | null {
   const key = process.env["PAYSTACK_SECRET_KEY"]?.trim();
   return key?.startsWith("sk_") ? key : null;
-}
-
-async function loadPayoutDestination(userId: string) {
-  const query = new URLSearchParams({
-    select: "encrypted_payload,iv,auth_tag,encryption_version",
-    user_id: `eq.${userId}`,
-    limit: "1",
-  });
-  const rows = await supabaseRest<DbRow[]>(`payout_destinations?${query}`);
-  const row = rows[0];
-  if (!row) return { configured: false as const };
-
-  const version = Number(row["encryption_version"]);
-  if (version !== 1) throw new Error("Unsupported payout encryption version.");
-  const details = JSON.parse(
-    decryptPayoutDetails(
-      String(row["encrypted_payload"]),
-      String(row["iv"]),
-      String(row["auth_tag"]),
-    ),
-  ) as { bankName?: unknown; accountName?: unknown; accountNumber?: unknown };
-  const bankName = typeof details.bankName === "string" ? details.bankName : "";
-  const accountName = typeof details.accountName === "string" ? details.accountName : "";
-  const accountNumber = typeof details.accountNumber === "string" ? details.accountNumber : "";
-  if (!bankName || !accountName || !/^\d{10}$/.test(accountNumber)) {
-    throw new Error("Stored payout details are invalid.");
-  }
-  return {
-    configured: true as const,
-    bankName,
-    accountName,
-    accountLast4: accountNumber.slice(-4),
-  };
 }
 
 router.get("/account/payout-banks", requireAuth, async (req, res): Promise<void> => {
@@ -90,7 +58,19 @@ router.get("/account/payout-banks", requireAuth, async (req, res): Promise<void>
 router.get("/account/payout-destination", requireAuth, async (req, res): Promise<void> => {
   const user = await requireUser(req, res);
   if (!user) return;
-  res.json(GetPayoutDestinationResponse.parse(await loadPayoutDestination(user.id)));
+  const destination = await loadVerifiedPayoutDestination(user.id);
+  res.json(
+    GetPayoutDestinationResponse.parse(
+      destination
+        ? {
+            configured: true,
+            bankName: destination.bankName,
+            accountName: destination.accountName,
+            accountLast4: destination.accountNumber.slice(-4),
+          }
+        : { configured: false },
+    ),
+  );
 });
 
 router.put("/account/payout-destination", requireAuth, async (req, res): Promise<void> => {
@@ -178,6 +158,7 @@ router.put("/account/payout-destination", requireAuth, async (req, res): Promise
       iv: encrypted.iv,
       auth_tag: encrypted.authTag,
       encryption_version: 1,
+      verified_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
     prefer: "resolution=merge-duplicates,return=minimal",
