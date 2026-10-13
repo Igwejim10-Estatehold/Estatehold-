@@ -55,7 +55,7 @@ async function loadPropertiesWithSource(): Promise<{ rows: DbProperty[]; dataSou
   try {
     return { rows: await loadBrowseableProperties(), dataSource: "live" };
   } catch (error) {
-    if (error instanceof SupabaseRequestError && error.code === "CONNECTION_FAILED") {
+    if (error instanceof SupabaseRequestError && ["CONNECTION_FAILED", "INVALID_URL"].includes(error.code ?? "")) {
       return { rows: OFFLINE_DEMO_ROWS, dataSource: "mock" };
     }
     throw error;

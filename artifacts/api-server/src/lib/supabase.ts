@@ -49,8 +49,14 @@ export function getServiceRoleKey(): string {
 }
 
 export function getPublicConfig() {
+  let supabaseUrl = "";
+  try {
+    supabaseUrl = getSupabaseUrl();
+  } catch (error) {
+    if (!(error instanceof SupabaseRequestError) || error.code !== "INVALID_URL") throw error;
+  }
   return {
-    supabaseUrl: getSupabaseUrl(),
+    supabaseUrl,
     supabaseAnonKey: getSupabaseAnonKey(),
     googleMapsApiKey: process.env["GOOGLE_MAPS_API_KEY"] ?? "",
     paystackPublicKey:
