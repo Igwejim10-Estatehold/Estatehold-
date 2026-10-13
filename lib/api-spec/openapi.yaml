@@ -309,11 +309,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeeQuote"
+  /pricing/processing-fees:
+    get:
+      operationId: getProcessingFeeSchedule
+      tags: [payments]
+      summary: Get public listing and booking processing fees
+      responses:
+        "200":
+          description: Current public processing fee schedule
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcessingFeeSchedule"
   /installments/quote:
     post:
       operationId: calculateInstallments
       tags: [payments]
       summary: Calculate an installment plan
+      security:
+        - bearerAuth: []
+        - {}
       requestBody:
         required: true
         content:
@@ -618,7 +633,7 @@ components:
           enum: [test, disabled]
     PropertyCategory:
       type: string
-      enum: [land, home, warehouse, complex, shopping_mall, hotel, short_let, school, hospital, filling_station, multipurpose_hall, custom]
+      enum: [land, home, warehouse, complex, shopping_mall, hotel, short_let, school, hospital, filling_station, worship_center, factory, multipurpose_hall, custom]
     PinStatus:
       type: string
       enum: [verified, pending, dispute, tenant_protected]
@@ -636,7 +651,7 @@ components:
         description: { type: string }
         priceNaira: { type: integer, minimum: 0 }
         priceUnit: { type: string }
-        intent: { type: string, enum: [sale, rent, social] }
+        intent: { type: string, enum: [sale, rent, lease, social] }
         bedrooms: { type: integer, minimum: 0 }
         bathrooms: { type: integer, minimum: 0 }
         sizeSqm: { type: integer, minimum: 0 }
@@ -668,7 +683,7 @@ components:
         description: { type: string }
         priceNaira: { type: integer, minimum: 1 }
         priceUnit: { type: string }
-        intent: { type: string, enum: [sale, rent, social] }
+        intent: { type: string, enum: [sale, rent, lease, social] }
         bedrooms: { type: integer, minimum: 0 }
         bathrooms: { type: integer, minimum: 0 }
         sizeSqm: { type: integer, minimum: 0 }
@@ -765,7 +780,7 @@ components:
       required: [id, role, fullName, email]
       properties:
         id: { type: string }
-        role: { type: string, enum: [client, landlord, agent, attorney, admin] }
+        role: { type: string, enum: [client, landlord, agent, attorney, represented_tenant, admin] }
         fullName: { type: string }
         email: { type: string, format: email }
         phone: { type: string }
@@ -819,12 +834,25 @@ components:
         agentFeeNaira: { type: integer }
         landlordReceivesNaira: { type: integer }
         note: { type: string }
+    ProcessingFeeSchedule:
+      type: object
+      required: [standardListingFeeNaira, institutionalListingFeeNaira, institutionalYearlyServiceChargeNaira, hotelListingFeeNaira, hotelOwnerCommissionPercent, guestCommissionPercent]
+      properties:
+        standardListingFeeNaira: { type: integer }
+        institutionalListingFeeNaira: { type: integer }
+        institutionalYearlyServiceChargeNaira: { type: integer }
+        hotelListingFeeNaira: { type: integer }
+        hotelOwnerCommissionPercent: { type: number }
+        guestCommissionPercent: { type: number }
+        standardCategories: { type: array, items: { type: string } }
+        institutionalCategories: { type: array, items: { type: string } }
     InstallmentQuoteInput:
       type: object
-      required: [amountNaira, count]
+      required: [amountNaira, count, transactionType]
       properties:
         amountNaira: { type: integer, minimum: 1 }
         count: { type: integer, minimum: 2, maximum: 4 }
+        transactionType: { type: string, enum: [rent, lease, shared, sale, loan] }
     InstallmentQuote:
       type: object
       required: [items, totalNaira]
@@ -965,7 +993,7 @@ components:
               profileId: { type: string }
               fullName: { type: string }
               email: { type: string }
-              role: { type: string, enum: [landlord, agent, attorney] }
+              role: { type: string, enum: [landlord, agent, attorney, represented_tenant] }
               status: { type: string, enum: [pending, verified, rejected] }
               nbaSealNumber: { type: string }
               agencyName: { type: string }

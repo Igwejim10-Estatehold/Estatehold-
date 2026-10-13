@@ -20,6 +20,8 @@ export const PropertyCategory = {
   school: 'school',
   hospital: 'hospital',
   filling_station: 'filling_station',
+  worship_center: 'worship_center',
+  factory: 'factory',
   multipurpose_hall: 'multipurpose_hall',
   custom: 'custom',
 } as const;

@@ -12,5 +12,6 @@ export type PropertyIntent = typeof PropertyIntent[keyof typeof PropertyIntent];
 export const PropertyIntent = {
   sale: 'sale',
   rent: 'rent',
+  lease: 'lease',
   social: 'social',
 } as const;

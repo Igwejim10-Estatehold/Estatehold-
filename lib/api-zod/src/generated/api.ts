@@ -45,7 +45,7 @@ export const GetDashboardResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -53,7 +53,7 @@ export const GetDashboardResponse = zod.object({
   "description": zod.string().optional(),
   "priceNaira": zod.number().int().min(getDashboardResponseItemsItemPriceNairaMin),
   "priceUnit": zod.string().optional(),
-  "intent": zod.enum(['sale', 'rent', 'social']),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
   "bedrooms": zod.number().int().min(getDashboardResponseItemsItemBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(getDashboardResponseItemsItemBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(getDashboardResponseItemsItemSizeSqmMin).optional(),
@@ -82,7 +82,7 @@ export const GetDashboardResponse = zod.object({
  * @summary Browse properties
  */
 export const ListPropertiesQueryParams = zod.object({
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']).optional(),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']).optional(),
   "intent": zod.enum(['sale', 'rent', 'social']).optional(),
   "search": zod.coerce.string().optional(),
   "state": zod.coerce.string().optional(),
@@ -103,7 +103,7 @@ export const ListPropertiesResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -111,7 +111,7 @@ export const ListPropertiesResponse = zod.object({
   "description": zod.string().optional(),
   "priceNaira": zod.number().int().min(listPropertiesResponseItemsItemPriceNairaMin),
   "priceUnit": zod.string().optional(),
-  "intent": zod.enum(['sale', 'rent', 'social']),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
   "bedrooms": zod.number().int().min(listPropertiesResponseItemsItemBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(listPropertiesResponseItemsItemBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(listPropertiesResponseItemsItemSizeSqmMin).optional(),
@@ -151,7 +151,7 @@ export const createPropertyBodySizeSqmMin = 0;
 
 export const CreatePropertyBody = zod.object({
   "title": zod.string().min(createPropertyBodyTitleMin).max(createPropertyBodyTitleMax),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -159,7 +159,7 @@ export const CreatePropertyBody = zod.object({
   "description": zod.string().optional(),
   "priceNaira": zod.number().int().min(1),
   "priceUnit": zod.string().optional(),
-  "intent": zod.enum(['sale', 'rent', 'social']),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
   "bedrooms": zod.number().int().min(createPropertyBodyBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(createPropertyBodyBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(createPropertyBodySizeSqmMin).optional(),
@@ -188,7 +188,7 @@ export const createPropertyResponseSizeSqmMin = 0;
 export const CreatePropertyResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -196,7 +196,7 @@ export const CreatePropertyResponse = zod.object({
   "description": zod.string().optional(),
   "priceNaira": zod.number().int().min(createPropertyResponsePriceNairaMin),
   "priceUnit": zod.string().optional(),
-  "intent": zod.enum(['sale', 'rent', 'social']),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
   "bedrooms": zod.number().int().min(createPropertyResponseBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(createPropertyResponseBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(createPropertyResponseSizeSqmMin).optional(),
@@ -238,7 +238,7 @@ export const getPropertyResponseSizeSqmMin = 0;
 export const GetPropertyResponse = zod.object({
   "id": zod.string(),
   "title": zod.string(),
-  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'multipurpose_hall', 'custom']),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
   "customType": zod.string().optional(),
   "state": zod.string(),
   "town": zod.string(),
@@ -246,7 +246,7 @@ export const GetPropertyResponse = zod.object({
   "description": zod.string().optional(),
   "priceNaira": zod.number().int().min(getPropertyResponsePriceNairaMin),
   "priceUnit": zod.string().optional(),
-  "intent": zod.enum(['sale', 'rent', 'social']),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
   "bedrooms": zod.number().int().min(getPropertyResponseBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(getPropertyResponseBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(getPropertyResponseSizeSqmMin).optional(),
@@ -437,7 +437,7 @@ export const CreateComplaintResponse = zod.object({
  */
 export const GetProfileResponse = zod.object({
   "id": zod.string(),
-  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'admin']),
+  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin']),
   "fullName": zod.string(),
   "email": zod.string().email(),
   "phone": zod.string().optional(),
@@ -494,7 +494,7 @@ export const UpdateProfileBody = zod.object({
 
 export const UpdateProfileResponse = zod.object({
   "id": zod.string(),
-  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'admin']),
+  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin']),
   "fullName": zod.string(),
   "email": zod.string().email(),
   "phone": zod.string().optional(),
@@ -536,6 +536,21 @@ export const CalculateFeesResponse = zod.object({
 
 
 /**
+ * @summary Get public listing and booking processing fees
+ */
+export const GetProcessingFeeScheduleResponse = zod.object({
+  "standardListingFeeNaira": zod.number().int(),
+  "institutionalListingFeeNaira": zod.number().int(),
+  "institutionalYearlyServiceChargeNaira": zod.number().int(),
+  "hotelListingFeeNaira": zod.number().int(),
+  "hotelOwnerCommissionPercent": zod.number(),
+  "guestCommissionPercent": zod.number(),
+  "standardCategories": zod.array(zod.string()).optional(),
+  "institutionalCategories": zod.array(zod.string()).optional()
+})
+
+
+/**
  * @summary Calculate an installment plan
  */
 
@@ -546,7 +561,8 @@ export const calculateInstallmentsBodyCountMax = 4;
 
 export const CalculateInstallmentsBody = zod.object({
   "amountNaira": zod.number().int().min(1),
-  "count": zod.number().int().min(calculateInstallmentsBodyCountMin).max(calculateInstallmentsBodyCountMax)
+  "count": zod.number().int().min(calculateInstallmentsBodyCountMin).max(calculateInstallmentsBodyCountMax),
+  "transactionType": zod.enum(['rent', 'lease', 'shared', 'sale', 'loan'])
 })
 
 export const CalculateInstallmentsResponse = zod.object({
@@ -652,7 +668,7 @@ export const ListAdminKycQueueResponse = zod.object({
   "profileId": zod.string(),
   "fullName": zod.string(),
   "email": zod.string().optional(),
-  "role": zod.enum(['landlord', 'agent', 'attorney']),
+  "role": zod.enum(['landlord', 'agent', 'attorney', 'represented_tenant']),
   "status": zod.enum(['pending', 'verified', 'rejected']),
   "nbaSealNumber": zod.string().optional(),
   "agencyName": zod.string().optional(),

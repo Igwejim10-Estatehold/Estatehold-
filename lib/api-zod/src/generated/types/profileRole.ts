@@ -14,5 +14,6 @@ export const ProfileRole = {
   landlord: 'landlord',
   agent: 'agent',
   attorney: 'attorney',
+  represented_tenant: 'represented_tenant',
   admin: 'admin',
 } as const;

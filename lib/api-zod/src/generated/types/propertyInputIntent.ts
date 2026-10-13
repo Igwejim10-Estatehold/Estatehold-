@@ -12,5 +12,6 @@ export type PropertyInputIntent = typeof PropertyInputIntent[keyof typeof Proper
 export const PropertyInputIntent = {
   sale: 'sale',
   rent: 'rent',
+  lease: 'lease',
   social: 'social',
 } as const;

@@ -50,6 +50,7 @@ import type {
   PaymentResult,
   PaystackWebhookInput,
   PaystackWebhookResult,
+  ProcessingFeeSchedule,
   Profile,
   ProfileInput,
   Property,
@@ -1390,6 +1391,83 @@ export const useCalculateFees = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCalculateFeesMutationOptions(options));
     }
+
+export const getGetProcessingFeeScheduleUrl = () => {
+
+
+
+
+  return `/api/pricing/processing-fees`
+}
+
+/**
+ * @summary Get public listing and booking processing fees
+ */
+export const getProcessingFeeSchedule = async ( options?: Parameters<typeof customFetch>[1]): Promise<ProcessingFeeSchedule> => {
+
+  return customFetch<ProcessingFeeSchedule>(getGetProcessingFeeScheduleUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProcessingFeeScheduleQueryKey = () => {
+    return [
+    `/api/pricing/processing-fees`
+    ] as const;
+    }
+
+
+export const getGetProcessingFeeScheduleQueryOptions = <TData = Awaited<ReturnType<typeof getProcessingFeeSchedule>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProcessingFeeSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProcessingFeeScheduleQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProcessingFeeSchedule>>> = ({ signal }) => getProcessingFeeSchedule({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProcessingFeeSchedule>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProcessingFeeScheduleQueryResult = NonNullable<Awaited<ReturnType<typeof getProcessingFeeSchedule>>>
+export type GetProcessingFeeScheduleQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get public listing and booking processing fees
+ */
+
+export function useGetProcessingFeeSchedule<TData = Awaited<ReturnType<typeof getProcessingFeeSchedule>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProcessingFeeSchedule>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProcessingFeeScheduleQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCalculateInstallmentsUrl = () => {
 

@@ -5,6 +5,7 @@ import {
   CalculateFeesResponse,
   CalculateInstallmentsBody,
   CalculateInstallmentsResponse,
+  GetProcessingFeeScheduleResponse,
   CreateTransactionBody,
   CreateTransactionResponse,
   InitializePaymentBody,
@@ -12,7 +13,7 @@ import {
   ReceivePaystackWebhookBody,
   ReceivePaystackWebhookHeader,
 } from "@workspace/api-zod";
-import { requireAuth, requireUser } from "../lib/auth";
+import { requireAuth, requireRoles, requireUser } from "../lib/auth";
 import { type DbRow } from "../lib/estatehold";
 import { supabaseRest, supabaseRpc } from "../lib/supabase";
 
@@ -89,12 +90,34 @@ router.post("/pricing/quote", (req, res): void => {
   res.json(feeQuote(parsed.data));
 });
 
-router.post("/installments/quote", (req, res): void => {
+router.get("/pricing/processing-fees", (_req, res): void => {
+  res.json(GetProcessingFeeScheduleResponse.parse({
+    standardListingFeeNaira: 1500,
+    institutionalListingFeeNaira: 2000,
+    institutionalYearlyServiceChargeNaira: 6000,
+    hotelListingFeeNaira: 2000,
+    hotelOwnerCommissionPercent: 2.5,
+    guestCommissionPercent: 2.5,
+    standardCategories: ["Homes", "Lands", "Warehouses", "Complexes", "Malls", "Filling Stations", "Factories"],
+    institutionalCategories: ["Hospitals", "Schools", "Worship Centers"],
+  }));
+});
+
+const optionalAuth = (req: Parameters<typeof requireAuth>[0], res: Parameters<typeof requireAuth>[1], next: Parameters<typeof requireAuth>[2]) => {
+  if (!req.get("authorization")) {
+    next();
+    return;
+  }
+  return requireAuth(req, res, next);
+};
+
+router.post("/installments/quote", optionalAuth, async (req, res): Promise<void> => {
   const parsed = CalculateInstallmentsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Enter an amount and choose two to four installments." });
     return;
   }
+  if (parsed.data.transactionType === "loan" && !(await requireRoles(req, res, ["represented_tenant"]))) return;
   const { amountNaira, count } = parsed.data;
   const base = Math.floor(amountNaira / count);
   const remainder = amountNaira - base * count;

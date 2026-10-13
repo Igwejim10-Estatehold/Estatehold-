@@ -39,6 +39,8 @@ export const PropertyCategory = {
   school: 'school',
   hospital: 'hospital',
   filling_station: 'filling_station',
+  worship_center: 'worship_center',
+  factory: 'factory',
   multipurpose_hall: 'multipurpose_hall',
   custom: 'custom',
 } as const;
@@ -59,6 +61,7 @@ export type PropertyIntent = typeof PropertyIntent[keyof typeof PropertyIntent];
 export const PropertyIntent = {
   sale: 'sale',
   rent: 'rent',
+  lease: 'lease',
   social: 'social',
 } as const;
 
@@ -123,6 +126,7 @@ export type PropertyInputIntent = typeof PropertyInputIntent[keyof typeof Proper
 export const PropertyInputIntent = {
   sale: 'sale',
   rent: 'rent',
+  lease: 'lease',
   social: 'social',
 } as const;
 
@@ -340,6 +344,7 @@ export const ProfileRole = {
   landlord: 'landlord',
   agent: 'agent',
   attorney: 'attorney',
+  represented_tenant: 'represented_tenant',
   admin: 'admin',
 } as const;
 
@@ -439,6 +444,28 @@ export interface FeeQuote {
   note?: string;
 }
 
+export interface ProcessingFeeSchedule {
+  standardListingFeeNaira: number;
+  institutionalListingFeeNaira: number;
+  institutionalYearlyServiceChargeNaira: number;
+  hotelListingFeeNaira: number;
+  hotelOwnerCommissionPercent: number;
+  guestCommissionPercent: number;
+  standardCategories?: string[];
+  institutionalCategories?: string[];
+}
+
+export type InstallmentQuoteInputTransactionType = typeof InstallmentQuoteInputTransactionType[keyof typeof InstallmentQuoteInputTransactionType];
+
+
+export const InstallmentQuoteInputTransactionType = {
+  rent: 'rent',
+  lease: 'lease',
+  shared: 'shared',
+  sale: 'sale',
+  loan: 'loan',
+} as const;
+
 export interface InstallmentQuoteInput {
   /** @minimum 1 */
   amountNaira: number;
@@ -447,6 +474,7 @@ export interface InstallmentQuoteInput {
      * @maximum 4
      */
   count: number;
+  transactionType: InstallmentQuoteInputTransactionType;
 }
 
 export type InstallmentQuoteItemsItem = {
@@ -643,6 +671,7 @@ export const AdminKycQueueItemsItemRole = {
   landlord: 'landlord',
   agent: 'agent',
   attorney: 'attorney',
+  represented_tenant: 'represented_tenant',
 } as const;
 
 export type AdminKycQueueItemsItemStatus = typeof AdminKycQueueItemsItemStatus[keyof typeof AdminKycQueueItemsItemStatus];

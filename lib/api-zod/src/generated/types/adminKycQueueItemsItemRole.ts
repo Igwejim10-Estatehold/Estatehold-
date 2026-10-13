@@ -13,4 +13,5 @@ export const AdminKycQueueItemsItemRole = {
   landlord: 'landlord',
   agent: 'agent',
   attorney: 'attorney',
+  represented_tenant: 'represented_tenant',
 } as const;

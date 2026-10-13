@@ -5,6 +5,7 @@
  * Estatehold property marketplace API
  * OpenAPI spec version: 0.2.0
  */
+import type { InstallmentQuoteInputTransactionType } from './installmentQuoteInputTransactionType';
 
 export interface InstallmentQuoteInput {
   /** @minimum 1 */
@@ -14,4 +15,5 @@ export interface InstallmentQuoteInput {
      * @maximum 4
      */
   count: number;
+  transactionType: InstallmentQuoteInputTransactionType;
 }
