@@ -3,14 +3,194 @@ import {
   CreateTenancyAgreementBody,
   CreateTenancyAgreementResponse,
   GetProfileResponse,
+  GetPayoutBanksResponse,
+  GetPayoutDestinationResponse,
+  SavePayoutDestinationBody,
+  SavePayoutDestinationResponse,
   UpdateProfileBody,
   UpdateProfileResponse,
 } from "@workspace/api-zod";
 import { getUserRole, requireAuth, requireUser } from "../lib/auth";
 import { loadProfile, mapProfile, type DbRow } from "../lib/estatehold";
+import { decryptPayoutDetails, encryptPayoutDetails } from "../lib/payout-encryption";
 import { supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+type PaystackBank = { name?: unknown; code?: unknown };
+
+function getPaystackSecret(): string | null {
+  const key = process.env["PAYSTACK_SECRET_KEY"]?.trim();
+  return key?.startsWith("sk_") ? key : null;
+}
+
+async function loadPayoutDestination(userId: string) {
+  const query = new URLSearchParams({
+    select: "encrypted_payload,iv,auth_tag,encryption_version",
+    user_id: `eq.${userId}`,
+    limit: "1",
+  });
+  const rows = await supabaseRest<DbRow[]>(`payout_destinations?${query}`);
+  const row = rows[0];
+  if (!row) return { configured: false as const };
+
+  const version = Number(row["encryption_version"]);
+  if (version !== 1) throw new Error("Unsupported payout encryption version.");
+  const details = JSON.parse(
+    decryptPayoutDetails(
+      String(row["encrypted_payload"]),
+      String(row["iv"]),
+      String(row["auth_tag"]),
+    ),
+  ) as { bankName?: unknown; accountName?: unknown; accountNumber?: unknown };
+  const bankName = typeof details.bankName === "string" ? details.bankName : "";
+  const accountName = typeof details.accountName === "string" ? details.accountName : "";
+  const accountNumber = typeof details.accountNumber === "string" ? details.accountNumber : "";
+  if (!bankName || !accountName || !/^\d{10}$/.test(accountNumber)) {
+    throw new Error("Stored payout details are invalid.");
+  }
+  return {
+    configured: true as const,
+    bankName,
+    accountName,
+    accountLast4: accountNumber.slice(-4),
+  };
+}
+
+router.get("/account/payout-banks", requireAuth, async (req, res): Promise<void> => {
+  const secretKey = getPaystackSecret();
+  if (!secretKey) {
+    res.status(503).json({ message: "Paystack account verification is not configured." });
+    return;
+  }
+  const response = await fetch(
+    "https://api.paystack.co/bank?country=nigeria&currency=NGN&type=nuban&perPage=200",
+    { headers: { Authorization: `Bearer ${secretKey}` } },
+  );
+  const result = (await response.json().catch(() => null)) as
+    | { status?: boolean; data?: PaystackBank[] }
+    | null;
+  if (!response.ok || !result?.status || !Array.isArray(result.data)) {
+    req.log.warn({ status: response.status }, "Paystack bank directory request failed");
+    res.status(502).json({ message: "The bank list is temporarily unavailable." });
+    return;
+  }
+  const banks = result.data
+    .filter(
+      (bank): bank is { name: string; code: string } =>
+        typeof bank.name === "string" &&
+        bank.name.length > 0 &&
+        typeof bank.code === "string" &&
+        bank.code.length > 0,
+    )
+    .map(({ name, code }) => ({ name, code }));
+  res.json(GetPayoutBanksResponse.parse(banks));
+});
+
+router.get("/account/payout-destination", requireAuth, async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  res.json(GetPayoutDestinationResponse.parse(await loadPayoutDestination(user.id)));
+});
+
+router.put("/account/payout-destination", requireAuth, async (req, res): Promise<void> => {
+  const parsed = SavePayoutDestinationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Enter a Nigerian bank and a valid 10-digit account number." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const secretKey = getPaystackSecret();
+  if (!secretKey) {
+    res.status(503).json({ message: "Paystack account verification is not configured." });
+    return;
+  }
+
+  const bankResponse = await fetch(
+    "https://api.paystack.co/bank?country=nigeria&currency=NGN&type=nuban&perPage=200",
+    { headers: { Authorization: `Bearer ${secretKey}` } },
+  );
+  const bankResult = (await bankResponse.json().catch(() => null)) as
+    | { status?: boolean; data?: PaystackBank[] }
+    | null;
+  if (!bankResponse.ok || !bankResult?.status || !Array.isArray(bankResult.data)) {
+    req.log.warn({ status: bankResponse.status }, "Paystack bank directory validation failed");
+    res.status(502).json({ message: "The bank list is temporarily unavailable." });
+    return;
+  }
+  const selectedBank = bankResult.data.find(
+    (bank) => bank.code === parsed.data.bankCode && typeof bank.name === "string",
+  );
+  if (!selectedBank || typeof selectedBank.name !== "string") {
+    res.status(422).json({ message: "Choose a supported Nigerian bank." });
+    return;
+  }
+
+  const accountNumber = parsed.data.accountNumber;
+  const query = new URLSearchParams({
+    account_number: accountNumber,
+    bank_code: parsed.data.bankCode,
+  });
+  const response = await fetch(`https://api.paystack.co/bank/resolve?${query}`, {
+    headers: { Authorization: `Bearer ${secretKey}` },
+  });
+  const result = (await response.json().catch(() => null)) as
+    | {
+        status?: boolean;
+        data?: { account_name?: unknown; account_number?: unknown };
+      }
+    | null;
+  if (!response.ok && response.status >= 500) {
+    req.log.warn({ status: response.status }, "Paystack account resolution request failed");
+    res.status(502).json({ message: "Paystack account verification is temporarily unavailable." });
+    return;
+  }
+  if (!response.ok || !result?.status) {
+    res.status(422).json({ message: "Paystack could not verify that bank account. Check the details and retry." });
+    return;
+  }
+  const accountName = result.data?.account_name;
+  const resolvedAccountNumber = result.data?.account_number;
+  if (
+    typeof accountName !== "string" ||
+    !accountName.trim() ||
+    typeof resolvedAccountNumber !== "string" ||
+    resolvedAccountNumber.replace(/\D/g, "") !== accountNumber
+  ) {
+    res.status(422).json({ message: "Paystack returned incomplete account verification details." });
+    return;
+  }
+
+  const encrypted = encryptPayoutDetails(
+    JSON.stringify({
+      accountNumber,
+      accountName: accountName.trim(),
+      bankName: selectedBank.name,
+      bankCode: parsed.data.bankCode,
+    }),
+  );
+  await supabaseRest("payout_destinations?on_conflict=user_id", {
+    method: "POST",
+    body: {
+      user_id: user.id,
+      encrypted_payload: encrypted.encryptedPayload,
+      iv: encrypted.iv,
+      auth_tag: encrypted.authTag,
+      encryption_version: 1,
+      updated_at: new Date().toISOString(),
+    },
+    prefer: "resolution=merge-duplicates,return=minimal",
+  });
+  res.json(
+    SavePayoutDestinationResponse.parse({
+      configured: true,
+      bankName: selectedBank.name,
+      accountName: accountName.trim(),
+      accountLast4: accountNumber.slice(-4),
+    }),
+  );
+});
 
 router.get("/account/profile", requireAuth, async (req, res): Promise<void> => {
   const user = await requireUser(req, res);
@@ -81,8 +261,6 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
     town: input.town.trim(),
     village_of_origin: input.villageOfOrigin?.trim() ?? "",
     verification_status: String(current?.["verification_status"] ?? "unverified"),
-    bank_name: input.bankName?.trim() || null,
-    bank_account_last4: input.bankAccountLast4?.trim() || null,
     updated_at: new Date().toISOString(),
   };
   const rows = await supabaseRest<DbRow[]>("profiles?on_conflict=id&select=*", {

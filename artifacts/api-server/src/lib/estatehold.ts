@@ -144,11 +144,6 @@ export function mapProfile(row: DbRow) {
     verificationStatus: String(row["verification_status"] ?? "unverified"),
     nbaSealNumber:
       typeof row["nba_seal_number"] === "string" ? row["nba_seal_number"] : undefined,
-    bankName: typeof row["bank_name"] === "string" ? row["bank_name"] : undefined,
-    bankAccountLast4:
-      typeof row["bank_account_last4"] === "string"
-        ? row["bank_account_last4"]
-        : undefined,
   };
 }
 

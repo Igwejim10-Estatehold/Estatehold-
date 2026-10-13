@@ -291,6 +291,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Profile"
+  /account/payout-banks:
+    get:
+      operationId: getPayoutBanks
+      tags: [account]
+      summary: List Nigerian banks supported by Paystack
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Paystack bank directory
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PayoutBank"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Paystack bank directory unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Paystack is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /account/payout-destination:
+    get:
+      operationId: getPayoutDestination
+      tags: [account]
+      summary: Get the signed-in user's masked payout destination
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Masked payout destination, or configured false when none exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutDestination"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    put:
+      operationId: savePayoutDestination
+      tags: [account]
+      summary: Verify and securely save the signed-in user's payout destination
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayoutDestinationInput"
+      responses:
+        "200":
+          description: Verified and saved masked payout destination
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutDestination"
+        "400":
+          description: Invalid payout destination details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Paystack could not verify the account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "502":
+          description: Paystack verification service unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: Paystack is not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /pricing/quote:
     post:
       operationId: calculateFees
@@ -793,8 +896,6 @@ components:
         agentBio: { type: string }
         verificationStatus: { type: string, enum: [unverified, pending, verified, rejected] }
         nbaSealNumber: { type: string }
-        bankName: { type: string }
-        bankAccountLast4: { type: string }
     ProfileInput:
       type: object
       required: [role, fullName, phone, state, town]
@@ -814,8 +915,26 @@ components:
           items: { type: string, maxLength: 400 }
           maxItems: 2
         nbaSealNumber: { type: string }
+    PayoutBank:
+      type: object
+      required: [name, code]
+      properties:
+        name: { type: string }
+        code: { type: string }
+    PayoutDestination:
+      type: object
+      required: [configured]
+      properties:
+        configured: { type: boolean }
         bankName: { type: string }
-        bankAccountLast4: { type: string, maxLength: 4 }
+        accountName: { type: string }
+        accountLast4: { type: string, pattern: '^[0-9]{4}$' }
+    PayoutDestinationInput:
+      type: object
+      required: [bankCode, accountNumber]
+      properties:
+        bankCode: { type: string, minLength: 1, maxLength: 20 }
+        accountNumber: { type: string, pattern: '^[0-9]{10}$' }
     FeeQuoteInput:
       type: object
       required: [transactionType, amountNaira, isManaged, isDirectLandlord]

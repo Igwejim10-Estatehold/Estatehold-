@@ -23,6 +23,4 @@ export interface Profile {
   agentBio?: string;
   verificationStatus?: ProfileVerificationStatus;
   nbaSealNumber?: string;
-  bankName?: string;
-  bankAccountLast4?: string;
 }

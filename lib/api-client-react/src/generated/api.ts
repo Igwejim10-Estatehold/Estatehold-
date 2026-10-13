@@ -48,6 +48,9 @@ import type {
   ListSpecialRequests200,
   PaymentInput,
   PaymentResult,
+  PayoutBank,
+  PayoutDestination,
+  PayoutDestinationInput,
   PaystackWebhookInput,
   PaystackWebhookResult,
   ProcessingFeeSchedule,
@@ -1302,6 +1305,248 @@ export const useUpdateProfile = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateProfileMutationOptions(options));
+    }
+
+export const getGetPayoutBanksUrl = () => {
+
+
+
+
+  return `/api/account/payout-banks`
+}
+
+/**
+ * @summary List Nigerian banks supported by Paystack
+ */
+export const getPayoutBanks = async ( options?: Parameters<typeof customFetch>[1]): Promise<PayoutBank[]> => {
+
+  return customFetch<PayoutBank[]>(getGetPayoutBanksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPayoutBanksQueryKey = () => {
+    return [
+    `/api/account/payout-banks`
+    ] as const;
+    }
+
+
+export const getGetPayoutBanksQueryOptions = <TData = Awaited<ReturnType<typeof getPayoutBanks>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayoutBanks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayoutBanksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayoutBanks>>> = ({ signal }) => getPayoutBanks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayoutBanks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPayoutBanksQueryResult = NonNullable<Awaited<ReturnType<typeof getPayoutBanks>>>
+export type GetPayoutBanksQueryError = ErrorType<Error>
+
+
+/**
+ * @summary List Nigerian banks supported by Paystack
+ */
+
+export function useGetPayoutBanks<TData = Awaited<ReturnType<typeof getPayoutBanks>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayoutBanks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPayoutBanksQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPayoutDestinationUrl = () => {
+
+
+
+
+  return `/api/account/payout-destination`
+}
+
+/**
+ * @summary Get the signed-in user's masked payout destination
+ */
+export const getPayoutDestination = async ( options?: Parameters<typeof customFetch>[1]): Promise<PayoutDestination> => {
+
+  return customFetch<PayoutDestination>(getGetPayoutDestinationUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPayoutDestinationQueryKey = () => {
+    return [
+    `/api/account/payout-destination`
+    ] as const;
+    }
+
+
+export const getGetPayoutDestinationQueryOptions = <TData = Awaited<ReturnType<typeof getPayoutDestination>>, TError = ErrorType<Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayoutDestination>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPayoutDestinationQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPayoutDestination>>> = ({ signal }) => getPayoutDestination({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPayoutDestination>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPayoutDestinationQueryResult = NonNullable<Awaited<ReturnType<typeof getPayoutDestination>>>
+export type GetPayoutDestinationQueryError = ErrorType<Error>
+
+
+/**
+ * @summary Get the signed-in user's masked payout destination
+ */
+
+export function useGetPayoutDestination<TData = Awaited<ReturnType<typeof getPayoutDestination>>, TError = ErrorType<Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPayoutDestination>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPayoutDestinationQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSavePayoutDestinationUrl = () => {
+
+
+
+
+  return `/api/account/payout-destination`
+}
+
+/**
+ * @summary Verify and securely save the signed-in user's payout destination
+ */
+export const savePayoutDestination = async (payoutDestinationInput: PayoutDestinationInput, options?: Parameters<typeof customFetch>[1]): Promise<PayoutDestination> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PayoutDestination>(getSavePayoutDestinationUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(payoutDestinationInput)
+  }
+);}
+
+
+
+
+
+export const getSavePayoutDestinationMutationKey = () => ['savePayoutDestination'] as const;
+
+export const getSavePayoutDestinationMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePayoutDestination>>, TError,SavePayoutDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof savePayoutDestination>>, TError,SavePayoutDestinationMutationVariables, TContext> => {
+
+const mutationKey = getSavePayoutDestinationMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof savePayoutDestination>>, SavePayoutDestinationMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  savePayoutDestination(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SavePayoutDestinationMutationResult = NonNullable<Awaited<ReturnType<typeof savePayoutDestination>>>
+    export type SavePayoutDestinationMutationBody = BodyType<PayoutDestinationInput>
+    export type SavePayoutDestinationMutationError = ErrorType<Error>
+    export type SavePayoutDestinationMutationVariables = {data: BodyType<PayoutDestinationInput>}
+
+    /**
+ * @summary Verify and securely save the signed-in user's payout destination
+ */
+export const useSavePayoutDestination = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePayoutDestination>>, TError,SavePayoutDestinationMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof savePayoutDestination>>,
+        TError,
+        SavePayoutDestinationMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSavePayoutDestinationMutationOptions(options));
     }
 
 export const getCalculateFeesUrl = () => {

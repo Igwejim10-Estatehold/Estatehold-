@@ -13,11 +13,12 @@ import {
   getListSpecialRequestsQueryKey, useListAdminKycQueue, useListAdminHotelVerificationQueue, useReviewKyc,
   useReviewHotelVerification, useCalculateFees, useCalculateInstallments,
   useCreateComplaint, useCreateProperty, useCreateSpecialRequest, useCreateTenancyAgreement, useGetAdminDashboard,
-  useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
+  getGetPayoutBanksQueryKey, getGetPayoutDestinationQueryKey, useGetPayoutBanks, useGetPayoutDestination,
+  useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
   useListComplaints, useListProperties, useListSocialHousingUnits, useListSpecialRequests, useReleaseEscrow,
   useRequestPropertyDelisting, useUpdateProfile,
 } from '@workspace/api-client-react';
-import type { ComplaintInput, FeeQuote, InstallmentQuote, ListSocialHousingUnits200, ListSpecialRequests200, ProcessingFeeSchedule, Property, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
+import type { ComplaintInput, FeeQuote, InstallmentQuote, ListSocialHousingUnits200, ListSpecialRequests200, PayoutBank, PayoutDestination, ProcessingFeeSchedule, Property, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
 import {
   Activity, ArrowLeft, ArrowRight, BadgeCheck, Building2, Calculator, Check, ChevronDown, ChevronRight,
   CircleAlert, Compass, FileCheck2, FileText, HeartHandshake, Home, Landmark, LifeBuoy,
@@ -55,10 +56,11 @@ function LogoMark({ small = false }: { small?: boolean }) {
     <img src="/Public/estatehold-logo.png" alt="Estatehold logo" className="h-full w-full object-contain" draggable={false}/>
   </span>;
 }
-function Field({ label, name, type = 'text', placeholder, required = false, defaultValue, min, step, readOnly = false }: {
+function Field({ label, name, type = 'text', placeholder, required = false, defaultValue, min, step, readOnly = false, inputMode, autoComplete, maxLength, pattern }: {
   label: string; name: string; type?: string; placeholder?: string; required?: boolean; defaultValue?: string | number; min?: number; step?: number; readOnly?: boolean;
+  inputMode?: 'numeric'; autoComplete?: string; maxLength?: number; pattern?: string;
 }) {
-  return <label className="block text-sm font-semibold text-[#304039]">{label}<input data-testid={`input-${name}`} name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue} min={min} step={step} readOnly={readOnly}
+  return <label className="block text-sm font-semibold text-[#304039]">{label}<input data-testid={`input-${name}`} name={name} type={type} required={required} placeholder={placeholder} defaultValue={defaultValue} min={min} step={step} readOnly={readOnly} inputMode={inputMode} autoComplete={autoComplete} maxLength={maxLength} pattern={pattern}
     className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal text-[#17211b] outline-none transition focus:border-[#16A34A] focus:ring-4 focus:ring-[#16A34A]/10" /></label>;
 }
 function SelectField({ label, name, options, defaultValue, disabledOptions = [] }: { label: string; name: string; options: Array<[string, string]>; defaultValue?: string; disabledOptions?: string[] }) {
@@ -106,7 +108,7 @@ function AppContent() {
   const [propertyRoute, propertyRouteParams] = useRoute('/property/:id');
   const [mobileMore, setMobileMore] = useState(false);
   const [notice, setNotice] = useState('');
-  const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string } } | null>(() => {
+  const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string; id?: string } } | null>(() => {
     try { const raw = localStorage.getItem('estatehold-session'); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspaceData | null>(null);
@@ -119,6 +121,8 @@ function AppContent() {
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey() } });
   const dashboard = useGetDashboard({ query: { enabled: location === '/', queryKey: getGetDashboardQueryKey(), retry: false } });
   const profile = useGetProfile({ query: { enabled: !!authSession || ['/profile','/admin','/agent-dashboard'].includes(location), queryKey: getGetProfileQueryKey(), retry: false } });
+  const payoutBanks = useGetPayoutBanks({ query: { enabled: location === '/profile' && !!authSession, queryKey: getGetPayoutBanksQueryKey(), staleTime: 5 * 60 * 1000, retry: false } });
+  const payoutDestination = useGetPayoutDestination({ query: { enabled: location === '/profile' && !!authSession, queryKey: [...getGetPayoutDestinationQueryKey(), authSession?.user?.id], retry: false } });
   useEffect(() => {
     if (location !== '/admin' || !authSession) return;
     let active = true;
@@ -149,6 +153,7 @@ function AppContent() {
   const createRequest = useCreateSpecialRequest();
   const createComplaint = useCreateComplaint();
   const updateProfile = useUpdateProfile();
+  const savePayoutDestination = useSavePayoutDestination({ mutation: { gcTime: 0 } });
   const calculateFees = useCalculateFees();
   const calculateInstallments = useCalculateInstallments();
   const initializePayment = useInitializePayment();
@@ -198,7 +203,7 @@ function AppContent() {
       setAuthSession(result); localStorage.setItem('estatehold-session', JSON.stringify(result)); navigate('/'); refresh(getGetProfileQueryKey());
     } catch (error) { setAuthError(error instanceof Error ? error.message : 'Unable to authenticate.'); }
   };
-  const logout = () => { localStorage.removeItem('estatehold-session'); setAuthSession(null); statusMessage('You have signed out.'); };
+  const logout = () => { localStorage.removeItem('estatehold-session'); setAuthSession(null); queryClient.removeQueries({ queryKey: getGetPayoutDestinationQueryKey() }); statusMessage('You have signed out.'); };
   const shellRoutes = ['/sign-in','/sign-up'];
   const routeTitle = routes.find(([path]) => path === location)?.[1] || '';
   const submitProperty = (fd: FormData) => {
@@ -230,10 +235,16 @@ function AppContent() {
       role: String(fd.get('role')) as ProfileInput['role'], fullName: String(fd.get('fullName')), phone: String(fd.get('phone') || ''),
       country: 'Nigeria', state: String(fd.get('state')), lga: String(fd.get('lga') || ''), town: String(fd.get('town')),
       villageOfOrigin: String(fd.get('villageOfOrigin') || '') || undefined, nbaSealNumber: String(fd.get('nbaSealNumber') || '') || undefined,
-      bankName: String(fd.get('bankName') || '') || undefined, bankAccountLast4: String(fd.get('bankAccountLast4') || '') || undefined,
       agencyName: String(fd.get('agencyName') || '') || undefined, agentBio: String(fd.get('agentBio') || '') || undefined,
     };
     updateProfile.mutate({ data: input }, { onSuccess: () => { refresh(getGetProfileQueryKey()); statusMessage('Your profile details have been saved.'); } });
+  };
+  const submitPayoutDestination = (form: HTMLFormElement) => {
+    const fd = new FormData(form);
+    savePayoutDestination.mutate(
+      { data: { bankCode: String(fd.get('bankCode') || ''), accountNumber: String(fd.get('accountNumber') || '') } },
+      { onSuccess: () => { refresh(getGetPayoutDestinationQueryKey()); form.reset(); statusMessage('Your payout account was verified and saved securely.'); } },
+    );
   };
   const submitAgentApplication = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setAgentFormError('');
@@ -433,7 +444,7 @@ function AppContent() {
       case '/installment-calculator':
         return <InstallmentPage quote={installmentQuote} onQuote={setInstallmentQuote} calc={calculateInstallments} canApplyForLoan={profile.data?.role==='represented_tenant'}/>;
       case '/profile':
-        return <ProfilePage profile={profile} updateProfile={updateProfile} onSubmit={submitProfile} authSession={authSession} onLogout={logout}/>;
+        return <ProfilePage profile={profile} updateProfile={updateProfile} onSubmit={submitProfile} authSession={authSession} onLogout={logout} payoutBanks={payoutBanks} payoutDestination={payoutDestination} savePayoutDestination={savePayoutDestination} onSavePayout={submitPayoutDestination}/>;
       case '/poa/landlord':
       case '/poa/tenant':
         return <PoaPage tenant={location.includes('tenant')}/>;
@@ -577,11 +588,31 @@ function InstallmentPage({ quote, onQuote, calc, canApplyForLoan }: { quote:Inst
   return <div className="mx-auto max-w-4xl space-y-6"><PageIntro eyebrow="Plan what works" title="Installment calculator" text="Check the installment schedule returned by Estatehold before you take the next step."/><div className="grid gap-5 md:grid-cols-[.8fr_1.2fr]"><form onSubmit={e=>{e.preventDefault();const fd=new FormData(e.currentTarget);const transactionType=String(fd.get('transactionType')) as 'rent'|'lease'|'shared'|'sale'|'loan';if(transactionType==='loan'&&!canApplyForLoan)return;calc.mutate({data:{amountNaira:Number(fd.get('installmentAmount')),count:Number(fd.get('count')),transactionType}},{onSuccess:onQuote});}} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-6"><SelectField label="Plan type" name="transactionType" options={ [['rent','Rent'],['lease','Lease'],['shared','Shared'],['sale','Sale'],['loan','Loan — represented tenants only']]} disabledOptions={canApplyForLoan?[]:['loan']}/>{!canApplyForLoan&&<Notice>Estatehold loan access is limited to represented tenants. NIN/BVN collection is unavailable until a verification provider is selected.</Notice>}<Field label="Total amount (₦)" name="installmentAmount" type="number" min={1} required placeholder="Enter amount"/><SelectField label="Number of installments" name="count" defaultValue="3" options={ [['2','2 installments'],['3','3 installments'],['4','4 installments']]}/>{calc.isError&&<Notice tone="red">The schedule could not be calculated. Loan quotes require an approved represented-tenant account.</Notice>}<Button type="submit" disabled={calc.isPending}>{calc.isPending?'Calculating…':'Build schedule'}</Button></form>
     {quote?<div className="rounded-3xl border border-[#e4eae3] bg-white p-6"><div className="flex items-start justify-between"><div><p className="text-xs font-bold uppercase tracking-wide text-[#65806a]">Payment schedule</p><h2 className="mt-1 font-display text-2xl font-extrabold">Your installments</h2></div><Calculator className="text-[#3a874d]"/></div><div className="mt-5 space-y-3">{quote.items.map(item=><div key={item.number} className="flex items-center justify-between rounded-xl bg-[#f4f8f3] p-4"><span className="flex items-center gap-3 text-sm font-semibold"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-bold text-[#23743a]">{item.number}</span>Payment {item.number}</span><b>{money(item.amountNaira)}</b></div>)}</div><div className="mt-4 flex justify-between border-t border-[#e6ece5] pt-4"><span className="font-bold">Total</span><b className="font-display text-xl">{money(quote.totalNaira)}</b></div></div>:<EmptyState icon={Calculator} title="A schedule, not a guess" body="Enter the full amount and choose 2–4 installments to see the calculated schedule."/>}</div></div>;
 }
-function ProfilePage({ profile, updateProfile, onSubmit, authSession, onLogout }: { profile:UseQueryResult<Profile>; updateProfile:ReturnType<typeof useUpdateProfile>; onSubmit:(d:FormData)=>void; authSession:{access_token:string;user?:{email?:string}}|null;onLogout:()=>void }) {
+function ProfilePage({ profile, updateProfile, onSubmit, authSession, onLogout, payoutBanks, payoutDestination, savePayoutDestination, onSavePayout }: { profile:UseQueryResult<Profile>; updateProfile:ReturnType<typeof useUpdateProfile>; onSubmit:(d:FormData)=>void; authSession:{access_token:string;user?:{email?:string}}|null;onLogout:()=>void;payoutBanks:UseQueryResult<PayoutBank[]>;payoutDestination:UseQueryResult<PayoutDestination>;savePayoutDestination:ReturnType<typeof useSavePayoutDestination>;onSavePayout:(form:HTMLFormElement)=>void }) {
   const p=profile.data;
+  const destination=payoutDestination.data;
+  const signedIn=!!authSession;
   return <div className="mx-auto max-w-4xl space-y-6"><PageIntro eyebrow="Your Estatehold identity" title="Profile & verification" text="Your location helps personalize discovery. Verification status is shown as returned by Estatehold."/>
     {profile.isLoading?<LoadingCard/>:profile.isError?<ErrorState onRetry={()=>profile.refetch()}/>:<div className="grid gap-5 lg:grid-cols-[.7fr_1.3fr]"><section className="h-fit rounded-3xl bg-[#0B0F0E] p-6 text-white"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#183b22] text-xl font-extrabold text-[#89d697]">{p?.fullName?.split(/\s/).map(s=>s[0]).slice(0,2).join('')||'EH'}</div><h2 className="mt-4 font-display text-2xl font-extrabold">{p?.fullName||'Estatehold profile'}</h2><p className="mt-1 text-sm text-[#a9b8aa]">{p?.email||authSession?.user?.email||'Email not available'}</p><div className="mt-5 flex items-center gap-2 rounded-xl bg-white/[.07] p-3 text-sm"><ShieldCheck size={17} className="text-[#8ad697]"/><span className="capitalize">{(p?.verificationStatus||'unverified').replace('_',' ')} verification</span></div><div className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-[#9eaea0]">KYC and legal details are handled in line with Estatehold’s review process.</div>{authSession && <button onClick={onLogout} className="mt-4 text-xs font-bold text-[#9bd6a4]">Sign out</button>}</section>
-      <form onSubmit={e=>{e.preventDefault();onSubmit(new FormData(e.currentTarget));}} className="grid gap-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:grid-cols-2 sm:p-7"><Field label="Full name" name="fullName" required defaultValue={p?.fullName}/><Field label="Email address (managed by auth)" name="email" type="email" defaultValue={p?.email || authSession?.user?.email} readOnly/><Field label="Phone" name="phone" defaultValue={p?.phone}/><SelectField label="Account role" name="role" defaultValue={p?.role||'client'} options={[['client','Client'],['landlord','Landlord'],['agent','Agent'],['attorney','Attorney']]}/><Field label="Country" name="country" defaultValue="Nigeria"/><Field label="State" name="state" required defaultValue={p?.state}/><Field label="LGA" name="lga" defaultValue={p?.lga}/><Field label="Town" name="town" required defaultValue={p?.town}/><Field label="Village of origin" name="villageOfOrigin" defaultValue={p?.villageOfOrigin}/><Field label="NBA seal number (attorney)" name="nbaSealNumber" defaultValue={p?.nbaSealNumber}/><Field label="Bank name" name="bankName" defaultValue={p?.bankName}/><Field label="Account last four digits" name="bankAccountLast4" defaultValue={p?.bankAccountLast4}/>{updateProfile.isError&&<div className="sm:col-span-2"><Notice tone="red">Profile update failed. Review required fields and retry.</Notice></div>}<div className="sm:col-span-2"><Button type="submit" disabled={updateProfile.isPending}>{updateProfile.isPending?'Saving profile…':'Save profile'} <Check size={15}/></Button></div></form></div>}</div>;
+      <div className="space-y-5">
+        <form onSubmit={e=>{e.preventDefault();onSubmit(new FormData(e.currentTarget));}} className="grid gap-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:grid-cols-2 sm:p-7"><Field label="Full name" name="fullName" required defaultValue={p?.fullName}/><Field label="Email address (managed by auth)" name="email" type="email" defaultValue={p?.email || authSession?.user?.email} readOnly/><Field label="Phone" name="phone" defaultValue={p?.phone}/><SelectField label="Account role" name="role" defaultValue={p?.role||'client'} options={[['client','Client'],['landlord','Landlord'],['agent','Agent'],['attorney','Attorney']]}/><Field label="Country" name="country" defaultValue="Nigeria"/><Field label="State" name="state" required defaultValue={p?.state}/><Field label="LGA" name="lga" defaultValue={p?.lga}/><Field label="Town" name="town" required defaultValue={p?.town}/><Field label="Village of origin" name="villageOfOrigin" defaultValue={p?.villageOfOrigin}/><Field label="NBA seal number (attorney)" name="nbaSealNumber" defaultValue={p?.nbaSealNumber}/>{updateProfile.isError&&<div className="sm:col-span-2"><Notice tone="red">Profile update failed. Review required fields and retry.</Notice></div>}<div className="sm:col-span-2"><Button type="submit" disabled={updateProfile.isPending}>{updateProfile.isPending?'Saving profile…':'Save profile'} <Check size={15}/></Button></div></form>
+        <section className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
+          <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#65806a]">Commission payouts</p><h2 className="mt-1 font-display text-xl font-extrabold">Verified bank account</h2><p className="mt-2 text-sm leading-6 text-[#718077]">Paystack verifies your Nigerian account. Estatehold encrypts the account details on the server and only shows a masked account number here.</p></div>
+          {!signedIn ? <Notice>Sign in to add or view a payout account.</Notice> :
+            payoutDestination.isLoading ? <LoadingCard/> :
+            payoutDestination.isError ? <ErrorState onRetry={()=>payoutDestination.refetch()}/> :
+            destination?.configured ? <div className="rounded-2xl border border-[#dce8dc] bg-[#f4f9f3] p-4"><div className="flex items-center gap-2 text-sm font-bold text-[#28663b]"><ShieldCheck size={17}/>Paystack account verified</div><p className="mt-3 font-semibold">{destination.accountName}</p><p className="mt-1 text-sm text-[#68766b]">{destination.bankName} · •••• {destination.accountLast4}</p><p className="mt-3 text-xs text-[#718077]">Entering another verified account below will replace this payout destination.</p></div> :
+            <p className="rounded-xl bg-[#f4f8f3] p-4 text-sm text-[#718077]">No payout account has been added.</p>}
+          {signedIn && <form onSubmit={e=>{e.preventDefault();onSavePayout(e.currentTarget);}} className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-semibold text-[#27352a]"><span className="mb-1.5 block">Nigerian bank</span><select name="bankCode" required disabled={payoutBanks.isLoading||payoutBanks.isError} className="min-h-11 w-full rounded-xl border border-[#dfe6df] bg-white px-3 text-sm font-normal outline-none focus:border-[#3a874d]"><option value="">{payoutBanks.isLoading?'Loading banks…':'Choose a bank'}</option>{payoutBanks.data?.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}</select></label>
+            <Field label="10-digit account number" name="accountNumber" type="text" inputMode="numeric" autoComplete="off" maxLength={10} pattern="[0-9]{10}" required placeholder="Enter account number"/>
+            {payoutBanks.isError&&<div className="sm:col-span-2"><Notice tone="red">The bank list could not be loaded. <button type="button" onClick={()=>payoutBanks.refetch()} className="font-bold underline">Retry</button></Notice></div>}
+            {savePayoutDestination.isError&&<div className="sm:col-span-2"><Notice tone="red">Paystack could not verify this account. Confirm the bank and 10-digit number, then try again.</Notice></div>}
+            <p className="text-xs leading-5 text-[#718077] sm:col-span-2">Do not enter BVN or NIN. Your account number is sent to Estatehold’s server for Paystack verification and is not saved in browser storage.</p>
+            <div className="sm:col-span-2"><Button type="submit" disabled={payoutBanks.isLoading||payoutBanks.isError||savePayoutDestination.isPending}>{savePayoutDestination.isPending?'Verifying and saving…':destination?.configured?'Verify replacement account':'Verify and save account'} <ShieldCheck size={15}/></Button></div>
+          </form>}
+        </section>
+      </div></div>}</div>;
 }
 function PoaPage({ tenant }: { tenant:boolean }) {
   return <div className="mx-auto max-w-4xl space-y-6"><PageIntro eyebrow="Document workspace" title={`${tenant?'Tenant':'Landlord'} power of attorney`} text="A structured draft to prepare for discussion with a qualified Nigerian legal professional."/><Notice tone="amber"><b>Draft only — not legal advice.</b> This document has no legal effect until reviewed and executed in accordance with Nigerian law by qualified counsel.</Notice>

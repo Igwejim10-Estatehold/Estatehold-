@@ -373,8 +373,6 @@ export interface Profile {
   agentBio?: string;
   verificationStatus?: ProfileVerificationStatus;
   nbaSealNumber?: string;
-  bankName?: string;
-  bankAccountLast4?: string;
 }
 
 export type ProfileInputRole = typeof ProfileInputRole[keyof typeof ProfileInputRole];
@@ -411,9 +409,29 @@ export interface ProfileInput {
      */
   evidenceUrls?: string[];
   nbaSealNumber?: string;
+}
+
+export interface PayoutBank {
+  name: string;
+  code: string;
+}
+
+export interface PayoutDestination {
+  configured: boolean;
   bankName?: string;
-  /** @maxLength 4 */
-  bankAccountLast4?: string;
+  accountName?: string;
+  /** @pattern ^[0-9]{4}$ */
+  accountLast4?: string;
+}
+
+export interface PayoutDestinationInput {
+  /**
+     * @minLength 1
+     * @maxLength 20
+     */
+  bankCode: string;
+  /** @pattern ^[0-9]{10}$ */
+  accountNumber: string;
 }
 
 export type FeeQuoteInputTransactionType = typeof FeeQuoteInputTransactionType[keyof typeof FeeQuoteInputTransactionType];

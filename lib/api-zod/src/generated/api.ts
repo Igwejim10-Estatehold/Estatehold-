@@ -449,9 +449,7 @@ export const GetProfileResponse = zod.object({
   "agencyName": zod.string().optional(),
   "agentBio": zod.string().optional(),
   "verificationStatus": zod.enum(['unverified', 'pending', 'verified', 'rejected']).optional(),
-  "nbaSealNumber": zod.string().optional(),
-  "bankName": zod.string().optional(),
-  "bankAccountLast4": zod.string().optional()
+  "nbaSealNumber": zod.string().optional()
 })
 
 
@@ -471,8 +469,6 @@ export const updateProfileBodyEvidenceUrlsItemMax = 400;
 
 export const updateProfileBodyEvidenceUrlsMax = 2;
 
-export const updateProfileBodyBankAccountLast4Max = 4;
-
 
 
 export const UpdateProfileBody = zod.object({
@@ -487,9 +483,7 @@ export const UpdateProfileBody = zod.object({
   "agencyName": zod.string().max(updateProfileBodyAgencyNameMax).optional(),
   "agentBio": zod.string().max(updateProfileBodyAgentBioMax).optional(),
   "evidenceUrls": zod.array(zod.string().max(updateProfileBodyEvidenceUrlsItemMax)).max(updateProfileBodyEvidenceUrlsMax).optional(),
-  "nbaSealNumber": zod.string().optional(),
-  "bankName": zod.string().optional(),
-  "bankAccountLast4": zod.string().max(updateProfileBodyBankAccountLast4Max).optional()
+  "nbaSealNumber": zod.string().optional()
 })
 
 export const UpdateProfileResponse = zod.object({
@@ -506,9 +500,55 @@ export const UpdateProfileResponse = zod.object({
   "agencyName": zod.string().optional(),
   "agentBio": zod.string().optional(),
   "verificationStatus": zod.enum(['unverified', 'pending', 'verified', 'rejected']).optional(),
-  "nbaSealNumber": zod.string().optional(),
+  "nbaSealNumber": zod.string().optional()
+})
+
+
+/**
+ * @summary List Nigerian banks supported by Paystack
+ */
+export const GetPayoutBanksResponseItem = zod.object({
+  "name": zod.string(),
+  "code": zod.string()
+})
+export const GetPayoutBanksResponse = zod.array(GetPayoutBanksResponseItem)
+
+
+/**
+ * @summary Get the signed-in user's masked payout destination
+ */
+export const getPayoutDestinationResponseAccountLast4RegExp = new RegExp('^[0-9]{4}$');
+
+
+export const GetPayoutDestinationResponse = zod.object({
+  "configured": zod.boolean(),
   "bankName": zod.string().optional(),
-  "bankAccountLast4": zod.string().optional()
+  "accountName": zod.string().optional(),
+  "accountLast4": zod.string().regex(getPayoutDestinationResponseAccountLast4RegExp).optional()
+})
+
+
+/**
+ * @summary Verify and securely save the signed-in user's payout destination
+ */
+export const savePayoutDestinationBodyBankCodeMax = 20;
+
+export const savePayoutDestinationBodyAccountNumberRegExp = new RegExp('^[0-9]{10}$');
+
+
+export const SavePayoutDestinationBody = zod.object({
+  "bankCode": zod.string().min(1).max(savePayoutDestinationBodyBankCodeMax),
+  "accountNumber": zod.string().regex(savePayoutDestinationBodyAccountNumberRegExp)
+})
+
+export const savePayoutDestinationResponseAccountLast4RegExp = new RegExp('^[0-9]{4}$');
+
+
+export const SavePayoutDestinationResponse = zod.object({
+  "configured": zod.boolean(),
+  "bankName": zod.string().optional(),
+  "accountName": zod.string().optional(),
+  "accountLast4": zod.string().regex(savePayoutDestinationResponseAccountLast4RegExp).optional()
 })
 
 

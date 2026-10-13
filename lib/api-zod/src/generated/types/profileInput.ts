@@ -31,7 +31,4 @@ export interface ProfileInput {
      */
   evidenceUrls?: string[];
   nbaSealNumber?: string;
-  bankName?: string;
-  /** @maxLength 4 */
-  bankAccountLast4?: string;
 }
