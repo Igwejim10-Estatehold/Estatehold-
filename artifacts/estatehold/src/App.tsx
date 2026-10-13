@@ -9,9 +9,11 @@ import {
   getGetAdminDashboardQueryKey, getGetDashboardQueryKey, getGetProfileQueryKey, getGetPublicConfigQueryKey,
   getGetPropertyQueryKey, getGetProcessingFeeScheduleQueryKey, getHealthCheckQueryKey, getListComplaintsQueryKey, getListPropertiesQueryKey,
   getListAdminKycQueueQueryKey, getListAdminHotelVerificationQueueQueryKey, getListSocialHousingUnitsQueryKey,
+  getListAdminLandlordKycQueueQueryKey,
   useGetProcessingFeeSchedule,
   getListSpecialRequestsQueryKey, useListAdminKycQueue, useListAdminHotelVerificationQueue, useReviewKyc,
   useReviewHotelVerification, useCalculateFees, useCalculateInstallments,
+  useListAdminLandlordKycQueue, useReviewLandlordKyc,
   useCreateComplaint, useCreateProperty, useCreateSpecialRequest, useCreateTenancyAgreement, useGetAdminDashboard,
   getGetPayoutBanksQueryKey, getGetPayoutDestinationQueryKey, useGetPayoutBanks, useGetPayoutDestination,
   useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
@@ -26,6 +28,7 @@ import {
   Plus, Search, Shield, ShieldCheck, SlidersHorizontal, Wallet,
 } from 'lucide-react';
 import NotFound from '@/pages/not-found';
+import LandlordKycPage from '@/pages/LandlordKycPage';
 
 const queryClient = new QueryClient();
 const routes = [
@@ -39,6 +42,7 @@ const routes = [
   ['/profile', 'My profile', BadgeCheck], ['/poa/landlord', 'Landlord POA draft', FileText],
   ['/poa/tenant', 'Tenant POA draft', FileCheck2], ['/recovery', 'Property recovery', Shield],
   ['/tenancy-agreement', 'Tenancy agreement', FileText], ['/admin', 'Operations desk', Activity],
+  ['/landlord-kyc', 'Landlord KYC & indemnity', ShieldCheck],
 ] as const;
 type AdminWorkspaceData = {
   agents: Array<{ id: string; fullName?: string; email?: string; phone?: string; town?: string; agencyName?: string; verificationStatus?: string }>;
@@ -149,6 +153,8 @@ function AppContent() {
   const complaintsQuery = useListComplaints({ query: { enabled: ['/admin'].includes(location), queryKey: getListComplaintsQueryKey() } });
   const adminQuery = useGetAdminDashboard({ query: { enabled: location === '/admin', queryKey: getGetAdminDashboardQueryKey() } });
   const kycQueue = useListAdminKycQueue({ query: { enabled: location === '/admin', queryKey: getListAdminKycQueueQueryKey() } });
+  const landlordKycQueue = useListAdminLandlordKycQueue({ query: { enabled: location === '/admin' && adminWorkspaceTab === 'Landlord KYC', queryKey: getListAdminLandlordKycQueueQueryKey(), retry: false } });
+  const reviewLandlordKyc = useReviewLandlordKyc();
   const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
   const singleProperty = useGetProperty(propertyRouteParams?.id || '', { query: { enabled: !!propertyRoute && !!propertyRouteParams?.id, queryKey: getGetPropertyQueryKey(propertyRouteParams?.id || '') } });
   const createProperty = useCreateProperty();
@@ -370,7 +376,9 @@ function AppContent() {
         const greeting = timeGreeting();
         return <div className="space-y-8">
           <section className="relative overflow-hidden rounded-[28px] bg-[#0B0F0E] px-6 py-8 text-[#f5f6f1] sm:px-10 sm:py-10">
-            <div className="absolute -right-10 -top-20 h-80 w-80 rounded-full border border-[#32553c]/60"/><div className="absolute -right-1 top-[-40px] h-64 w-64 rounded-full border border-[#32553c]/40"/><div className="absolute bottom-[-100px] right-[22%] h-64 w-64 rounded-full bg-[#16A34A]/10 blur-3xl"/>
+            <div aria-hidden="true" className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${import.meta.env.BASE_URL}estatehold-home-hero.jpg)` }}/>
+            <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/55 to-black/20"/>
+            <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/25 to-transparent"/>
             <div className="relative max-w-2xl"><span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[.06] px-3 py-1.5 text-[11px] font-bold uppercase tracking-[.15em] text-[#b6d6bc]"><MapPin size={13}/>{profileTown}</span>
               <p className="mt-7 text-sm font-medium text-[#adc0b0]">{greeting}</p><h1 className="mt-1 font-display text-4xl font-extrabold leading-[1.08] tracking-[-.04em] sm:text-6xl">A home should<br/><span className="text-[#82cf91]">feel certain.</span></h1>
               <p className="mt-4 max-w-md text-sm leading-6 text-[#c2ccc3]">Find a place with a location you can trust—and protection you can see.</p>
@@ -484,6 +492,8 @@ function AppContent() {
         return <RecoveryPage/>;
       case '/tenancy-agreement':
         return <AgreementPage properties={propertiesQuery.data?.items || dashboard.data?.items || []} mutation={createAgreement} result={createdAgreement} onResult={setCreatedAgreement}/>;
+      case '/landlord-kyc':
+        return <LandlordKycPage authSession={authSession} profile={profile.data} config={config.data}/>;
       case '/admin':
         if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
         if (profile.isLoading) return <LoadingCard/>;
@@ -491,9 +501,10 @@ function AppContent() {
         return <div className="space-y-6"><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
            <div className="rounded-3xl border border-[#e4eae3] bg-white p-4">
-              <div className="flex gap-2 overflow-x-auto">{['Pending Agents','All Agents','Properties','Users','Payments','Agent payouts'].map(tab=><button key={tab} onClick={()=>{setAdminWorkspaceTab(tab);if(tab==='Pending Agents')document.getElementById('pending-agents-queue')?.scrollIntoView({behavior:'smooth'});}} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${adminWorkspaceTab===tab?'bg-[#0B0F0E] text-white':'bg-[#f3f6f1] text-[#516256]'}`}>{tab}</button>)}</div>
+              <div className="flex gap-2 overflow-x-auto">{['Pending Agents','Landlord KYC','All Agents','Properties','Users','Payments','Agent payouts'].map(tab=><button key={tab} onClick={()=>{setAdminWorkspaceTab(tab);if(tab==='Pending Agents')document.getElementById('pending-agents-queue')?.scrollIntoView({behavior:'smooth'});}} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${adminWorkspaceTab===tab?'bg-[#0B0F0E] text-white':'bg-[#f3f6f1] text-[#516256]'}`}>{tab}</button>)}</div>
              {adminWorkspaceTab!=='Pending Agents' && <div className="mt-4">
                {adminWorkspaceLoading ? <LoadingCard/> : adminWorkspaceError ? <Notice tone="red">{adminWorkspaceError}</Notice> : !adminWorkspace ? <p className="text-sm text-[#718077]">Admin data is unavailable.</p> :
+                 adminWorkspaceTab==='Landlord KYC' ? landlordKycQueue.isLoading ? <LoadingCard/> : landlordKycQueue.isError ? <ErrorState onRetry={()=>landlordKycQueue.refetch()} error={landlordKycQueue.error}/> : landlordKycQueue.data?.items.length ? <div className="divide-y divide-[#edf1ec]">{landlordKycQueue.data.items.map(item=><div key={item.userId} className="py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm">{item.fullName}</b><p className="mt-1 text-xs text-[#718077]">NIN {item.maskedNin||'not available'} · {item.ninVerified?'Verified':'Not verified'} · Indemnity {item.indemnitySigned?'signed':'not signed'}</p><p className="mt-1 text-xs text-[#718077]">Review: {item.reviewStatus} · Submitted {new Date(item.createdAt).toLocaleDateString()}</p></div><div className="flex flex-wrap gap-2">{item.propertyDocUrl&&<Button variant="outline" onClick={()=>openKycDocument(item.propertyDocUrl!)}>View property document</Button>}{item.affidavitUrl&&<Button variant="outline" onClick={()=>openKycDocument(item.affidavitUrl!)}>View affidavit</Button>}</div></div><div className="mt-3 flex gap-2"><Button onClick={()=>reviewLandlordKyc.mutate({userId:item.userId,data:{decision:'approved'}},{onSuccess:()=>{refresh(getListAdminLandlordKycQueueQueryKey());statusMessage('Landlord KYC approved.');}})} disabled={reviewLandlordKyc.isPending||!item.indemnitySigned}>Approve</Button><Button variant="danger" onClick={()=>reviewLandlordKyc.mutate({userId:item.userId,data:{decision:'rejected'}},{onSuccess:()=>{refresh(getListAdminLandlordKycQueueQueryKey());statusMessage('Landlord KYC rejected.');}})} disabled={reviewLandlordKyc.isPending}>Reject</Button></div></div>)}</div> : <p className="text-sm text-[#718077]">No landlord KYC applications are waiting.</p> :
                  adminWorkspaceTab==='All Agents' ? <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">Agent</th><th className="p-2">Agency</th><th className="p-2">City</th><th className="p-2">Status</th></tr></thead><tbody>{adminWorkspace.agents.map(a=><tr key={a.id} className="border-t border-[#edf1ec]"><td className="p-2">{a.fullName}<span className="block text-xs text-[#718077]">{a.email}</span></td><td className="p-2">{a.agencyName||'—'}</td><td className="p-2">{a.town||'—'}</td><td className="p-2 capitalize">{a.verificationStatus||'unverified'}</td></tr>)}</tbody></table></div> :
                  adminWorkspaceTab==='Properties' ? <div className="divide-y divide-[#edf1ec]">{adminWorkspace.properties.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><b className="text-sm">{p.title||'Untitled property'}</b><p className="text-xs text-[#718077]">{p.category} · {p.town}, {p.state} · {p.moderationStatus}</p></div>{p.moderationStatus==='pending'&&<div className="flex gap-2"><Button onClick={()=>reviewAdminProperty(p.id,'approved')}>Approve</Button><Button variant="danger" onClick={()=>reviewAdminProperty(p.id,'rejected')}>Reject</Button></div>}</div>)}</div> :
                  adminWorkspaceTab==='Users' ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">User</th><th className="p-2">Role</th><th className="p-2">Verification</th></tr></thead><tbody>{adminWorkspace.users.map(u=><tr key={u.id} className="border-t border-[#edf1ec]"><td className="p-2">{u.fullName||'—'}<span className="block text-xs text-[#718077]">{u.email}</span></td><td className="p-2 capitalize">{u.role}</td><td className="p-2 capitalize">{u.verificationStatus}</td></tr>)}</tbody></table></div> :
@@ -648,18 +659,29 @@ function ProfilePage({ profile, updateProfile, onSubmit, authSession, onLogout, 
   const p=profile.data;
   const destination=payoutDestination.data;
   const signedIn=!!authSession;
+  const [landlordIndemnitySigned,setLandlordIndemnitySigned]=useState(false);
+  useEffect(()=>{
+    if(!signedIn||p?.role!=='landlord'){setLandlordIndemnitySigned(false);return;}
+    let active=true;
+    fetch('/api/landlord-kyc',{headers:{Authorization:`Bearer ${authSession!.access_token}`}})
+      .then(async response=>response.ok?response.json():null)
+      .then(data=>{if(active)setLandlordIndemnitySigned(data?.indemnitySigned===true);})
+      .catch(()=>{if(active)setLandlordIndemnitySigned(false);});
+    return()=>{active=false;};
+  },[authSession?.access_token,p?.role,signedIn]);
   return <div className="mx-auto max-w-4xl space-y-6"><PageIntro eyebrow="Your Estatehold identity" title="Profile & verification" text="Your location helps personalize discovery. Verification status is shown as returned by Estatehold."/>
     {profile.isLoading?<LoadingCard/>:profile.isError?<ErrorState onRetry={()=>profile.refetch()}/>:<div className="grid gap-5 lg:grid-cols-[.7fr_1.3fr]"><section className="h-fit rounded-3xl bg-[#0B0F0E] p-6 text-white"><div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#183b22] text-xl font-extrabold text-[#89d697]">{p?.fullName?.split(/\s/).map(s=>s[0]).slice(0,2).join('')||'EH'}</div><h2 className="mt-4 font-display text-2xl font-extrabold">{p?.fullName||'Estatehold profile'}</h2><p className="mt-1 text-sm text-[#a9b8aa]">{p?.email||authSession?.user?.email||'Email not available'}</p><div className="mt-5 flex items-center gap-2 rounded-xl bg-white/[.07] p-3 text-sm"><ShieldCheck size={17} className="text-[#8ad697]"/><span className="capitalize">{(p?.verificationStatus||'unverified').replace('_',' ')} verification</span></div><div className="mt-5 border-t border-white/10 pt-4 text-xs leading-5 text-[#9eaea0]">KYC and legal details are handled in line with Estatehold’s review process.</div>{authSession && <button onClick={onLogout} className="mt-4 text-xs font-bold text-[#9bd6a4]">Sign out</button>}</section>
       <div className="space-y-5">
         <form onSubmit={e=>{e.preventDefault();onSubmit(new FormData(e.currentTarget));}} className="grid gap-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:grid-cols-2 sm:p-7"><Field label="Full name" name="fullName" required defaultValue={p?.fullName}/><Field label="Email address (managed by auth)" name="email" type="email" defaultValue={p?.email || authSession?.user?.email} readOnly/><Field label="Phone" name="phone" defaultValue={p?.phone}/><SelectField label="Account role" name="role" defaultValue={p?.role||'client'} options={[['client','Client'],['landlord','Landlord'],['agent','Agent'],['attorney','Attorney']]}/><Field label="Country" name="country" defaultValue="Nigeria"/><Field label="State" name="state" required defaultValue={p?.state}/><Field label="LGA" name="lga" defaultValue={p?.lga}/><Field label="Town" name="town" required defaultValue={p?.town}/><Field label="Village of origin" name="villageOfOrigin" defaultValue={p?.villageOfOrigin}/><Field label="NBA seal number (attorney)" name="nbaSealNumber" defaultValue={p?.nbaSealNumber}/>{updateProfile.isError&&<div className="sm:col-span-2"><Notice tone="red">Profile update failed. Review required fields and retry.</Notice></div>}<div className="sm:col-span-2"><Button type="submit" disabled={updateProfile.isPending}>{updateProfile.isPending?'Saving profile…':'Save profile'} <Check size={15}/></Button></div></form>
         <section className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
           <div><p className="text-xs font-bold uppercase tracking-[.14em] text-[#65806a]">Commission payouts</p><h2 className="mt-1 font-display text-xl font-extrabold">Verified bank account</h2><p className="mt-2 text-sm leading-6 text-[#718077]">Paystack verifies your Nigerian account. Estatehold encrypts the account details on the server and only shows a masked account number here.</p></div>
+          {signedIn&&p?.role==='landlord'&&!landlordIndemnitySigned&&<Notice tone="amber">Review and sign the landlord indemnity before adding a payout account. <Link href="/landlord-kyc" className="ml-1 font-bold underline">Complete landlord KYC</Link></Notice>}
           {!signedIn ? <Notice>Sign in to add or view a payout account.</Notice> :
             payoutDestination.isLoading ? <LoadingCard/> :
             payoutDestination.isError ? <ErrorState onRetry={()=>payoutDestination.refetch()}/> :
             destination?.configured ? <div className="rounded-2xl border border-[#dce8dc] bg-[#f4f9f3] p-4"><div className="flex items-center gap-2 text-sm font-bold text-[#28663b]"><ShieldCheck size={17}/>Paystack account verified</div><p className="mt-3 font-semibold">{destination.accountName}</p><p className="mt-1 text-sm text-[#68766b]">{destination.bankName} · •••• {destination.accountLast4}</p><p className="mt-3 text-xs text-[#718077]">Entering another verified account below will replace this payout destination.</p></div> :
             <p className="rounded-xl bg-[#f4f8f3] p-4 text-sm text-[#718077]">No payout account has been added.</p>}
-          {signedIn && <form onSubmit={e=>{e.preventDefault();onSavePayout(e.currentTarget);}} className="grid gap-4 sm:grid-cols-2">
+          {signedIn && (p?.role!=='landlord'||landlordIndemnitySigned) && <form onSubmit={e=>{e.preventDefault();onSavePayout(e.currentTarget);}} className="grid gap-4 sm:grid-cols-2">
             <label className="block text-sm font-semibold text-[#27352a]"><span className="mb-1.5 block">Nigerian bank</span><select name="bankCode" required disabled={payoutBanks.isLoading||payoutBanks.isError} className="min-h-11 w-full rounded-xl border border-[#dfe6df] bg-white px-3 text-sm font-normal outline-none focus:border-[#3a874d]"><option value="">{payoutBanks.isLoading?'Loading banks…':'Choose a bank'}</option>{payoutBanks.data?.map(bank=><option key={bank.code} value={bank.code}>{bank.name}</option>)}</select></label>
             <Field label="10-digit account number" name="accountNumber" type="text" inputMode="numeric" autoComplete="off" maxLength={10} pattern="[0-9]{10}" required placeholder="Enter account number"/>
             {payoutBanks.isError&&<div className="sm:col-span-2"><Notice tone="red">The bank list could not be loaded. <button type="button" onClick={()=>payoutBanks.refetch()} className="font-bold underline">Retry</button></Notice></div>}
@@ -702,7 +724,7 @@ function Router() {
     <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
-    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
+    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }
 function App() {

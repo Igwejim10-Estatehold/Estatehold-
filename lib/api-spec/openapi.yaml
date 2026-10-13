@@ -378,6 +378,65 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /landlord-kyc:
+    get:
+      operationId: getLandlordKyc
+      tags: [account]
+      summary: Get the signed-in landlord's KYC and indemnity status
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Landlord KYC status without the full NIN
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandlordKycStatus"
+    post:
+      operationId: submitLandlordKyc
+      tags: [account]
+      summary: Submit encrypted landlord identity and ownership documents
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LandlordKycInput"
+      responses:
+        "200":
+          description: KYC submitted for admin review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandlordKycStatus"
+  /payouts/account:
+    post:
+      operationId: saveLandlordPayoutAccount
+      tags: [account]
+      summary: Save payout account after landlord indemnity has been signed
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PayoutDestinationInput"
+      responses:
+        "200":
+          description: Verified payout account saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PayoutDestination"
+        "403":
+          description: Landlord indemnity is not signed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     put:
       operationId: savePayoutDestination
       tags: [account]
@@ -584,6 +643,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminKycQueue"
+  /admin/queues/landlord-kyc:
+    get:
+      operationId: listAdminLandlordKycQueue
+      tags: [admin]
+      summary: List landlord KYC applications for review
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Landlord KYC review queue; full NIN is never returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminLandlordKycQueue"
+  /admin/landlord-kyc/{userId}/review:
+    post:
+      operationId: reviewLandlordKyc
+      tags: [admin]
+      summary: Approve or reject a landlord KYC application
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewLandlordKycInput"
+      responses:
+        "200":
+          description: Landlord KYC review saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LandlordKycReviewResult"
   /admin/queues/escrow:
     get:
       operationId: listAdminEscrowQueue
@@ -981,6 +1079,60 @@ components:
       properties:
         bankCode: { type: string, minLength: 1, maxLength: 20 }
         accountNumber: { type: string, pattern: '^[0-9]{10}$' }
+    LandlordKycInput:
+      type: object
+      required: [ninNumber, ninName, propertyAddress, propertyDocUrl, affidavitUrl, indemnitySigned, indemnityTextVersion]
+      properties:
+        ninNumber: { type: string, pattern: '^[0-9]{11}$' }
+        ninName: { type: string, minLength: 2, maxLength: 160 }
+        propertyAddress: { type: string, minLength: 5, maxLength: 500 }
+        propertyDocUrl: { type: string, minLength: 1, maxLength: 1000 }
+        affidavitUrl: { type: string, minLength: 1, maxLength: 1000 }
+        indemnitySigned: { type: boolean, enum: [true] }
+        indemnityTextVersion: { type: string, minLength: 1, maxLength: 80 }
+    LandlordKycStatus:
+      type: object
+      required: [submitted, ninVerified, indemnitySigned]
+      properties:
+        submitted: { type: boolean }
+        ninVerified: { type: boolean }
+        indemnitySigned: { type: boolean }
+        maskedNin: { type: string }
+        reviewStatus: { type: string, enum: [pending, approved, rejected] }
+        propertyDocUrl: { type: string }
+        affidavitUrl: { type: string }
+        signedAt: { type: string, format: date-time }
+    AdminLandlordKycQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [userId, fullName, ninVerified, indemnitySigned, reviewStatus, createdAt]
+            properties:
+              userId: { type: string }
+              fullName: { type: string }
+              maskedNin: { type: string }
+              ninVerified: { type: boolean }
+              indemnitySigned: { type: boolean }
+              reviewStatus: { type: string, enum: [pending, approved, rejected] }
+              propertyDocUrl: { type: string }
+              affidavitUrl: { type: string }
+              signedAt: { type: string, format: date-time }
+              createdAt: { type: string, format: date-time }
+    ReviewLandlordKycInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
+        adminNote: { type: string, maxLength: 1000 }
+    LandlordKycReviewResult:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected] }
     FeeQuoteInput:
       type: object
       required: [transactionType, amountNaira, isManaged, isDirectLandlord]

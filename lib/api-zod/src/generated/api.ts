@@ -595,6 +595,85 @@ export const GetPayoutDestinationResponse = zod.object({
 
 
 /**
+ * @summary Get the signed-in landlord's KYC and indemnity status
+ */
+export const GetLandlordKycResponse = zod.object({
+  "submitted": zod.boolean(),
+  "ninVerified": zod.boolean(),
+  "indemnitySigned": zod.boolean(),
+  "maskedNin": zod.string().optional(),
+  "reviewStatus": zod.enum(['pending', 'approved', 'rejected']).optional(),
+  "propertyDocUrl": zod.string().optional(),
+  "affidavitUrl": zod.string().optional(),
+  "signedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Submit encrypted landlord identity and ownership documents
+ */
+export const submitLandlordKycBodyNinNumberRegExp = new RegExp('^[0-9]{11}$');
+export const submitLandlordKycBodyNinNameMin = 2;
+export const submitLandlordKycBodyNinNameMax = 160;
+
+export const submitLandlordKycBodyPropertyAddressMin = 5;
+export const submitLandlordKycBodyPropertyAddressMax = 500;
+
+export const submitLandlordKycBodyPropertyDocUrlMax = 1000;
+
+export const submitLandlordKycBodyAffidavitUrlMax = 1000;
+
+export const submitLandlordKycBodyIndemnityTextVersionMax = 80;
+
+
+
+export const SubmitLandlordKycBody = zod.object({
+  "ninNumber": zod.string().regex(submitLandlordKycBodyNinNumberRegExp),
+  "ninName": zod.string().min(submitLandlordKycBodyNinNameMin).max(submitLandlordKycBodyNinNameMax),
+  "propertyAddress": zod.string().min(submitLandlordKycBodyPropertyAddressMin).max(submitLandlordKycBodyPropertyAddressMax),
+  "propertyDocUrl": zod.string().min(1).max(submitLandlordKycBodyPropertyDocUrlMax),
+  "affidavitUrl": zod.string().min(1).max(submitLandlordKycBodyAffidavitUrlMax),
+  "indemnitySigned": zod.literal(true),
+  "indemnityTextVersion": zod.string().min(1).max(submitLandlordKycBodyIndemnityTextVersionMax)
+})
+
+export const SubmitLandlordKycResponse = zod.object({
+  "submitted": zod.boolean(),
+  "ninVerified": zod.boolean(),
+  "indemnitySigned": zod.boolean(),
+  "maskedNin": zod.string().optional(),
+  "reviewStatus": zod.enum(['pending', 'approved', 'rejected']).optional(),
+  "propertyDocUrl": zod.string().optional(),
+  "affidavitUrl": zod.string().optional(),
+  "signedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Save payout account after landlord indemnity has been signed
+ */
+export const saveLandlordPayoutAccountBodyBankCodeMax = 20;
+
+export const saveLandlordPayoutAccountBodyAccountNumberRegExp = new RegExp('^[0-9]{10}$');
+
+
+export const SaveLandlordPayoutAccountBody = zod.object({
+  "bankCode": zod.string().min(1).max(saveLandlordPayoutAccountBodyBankCodeMax),
+  "accountNumber": zod.string().regex(saveLandlordPayoutAccountBodyAccountNumberRegExp)
+})
+
+export const saveLandlordPayoutAccountResponseAccountLast4RegExp = new RegExp('^[0-9]{4}$');
+
+
+export const SaveLandlordPayoutAccountResponse = zod.object({
+  "configured": zod.boolean(),
+  "bankName": zod.string().optional(),
+  "accountName": zod.string().optional(),
+  "accountLast4": zod.string().regex(saveLandlordPayoutAccountResponseAccountLast4RegExp).optional()
+})
+
+
+/**
  * @summary Verify and securely save the signed-in user's payout destination
  */
 export const savePayoutDestinationBodyBankCodeMax = 20;
@@ -782,6 +861,46 @@ export const ListAdminKycQueueResponse = zod.object({
   "evidenceUrls": zod.array(zod.string()).optional(),
   "createdAt": zod.coerce.date()
 }))
+})
+
+
+/**
+ * @summary List landlord KYC applications for review
+ */
+export const ListAdminLandlordKycQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "userId": zod.string(),
+  "fullName": zod.string(),
+  "maskedNin": zod.string().optional(),
+  "ninVerified": zod.boolean(),
+  "indemnitySigned": zod.boolean(),
+  "reviewStatus": zod.enum(['pending', 'approved', 'rejected']),
+  "propertyDocUrl": zod.string().optional(),
+  "affidavitUrl": zod.string().optional(),
+  "signedAt": zod.coerce.date().optional(),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+/**
+ * @summary Approve or reject a landlord KYC application
+ */
+export const ReviewLandlordKycParams = zod.object({
+  "userId": zod.coerce.string()
+})
+
+export const reviewLandlordKycBodyAdminNoteMax = 1000;
+
+
+
+export const ReviewLandlordKycBody = zod.object({
+  "decision": zod.enum(['approved', 'rejected']),
+  "adminNote": zod.string().max(reviewLandlordKycBodyAdminNoteMax).optional()
+})
+
+export const ReviewLandlordKycResponse = zod.object({
+  "status": zod.enum(['approved', 'rejected'])
 })
 
 

@@ -25,6 +25,7 @@ import type {
   AdminEscrowQueue,
   AdminHotelVerificationQueue,
   AdminKycQueue,
+  AdminLandlordKycQueue,
   Agreement,
   AgreementInput,
   Complaint,
@@ -41,6 +42,9 @@ import type {
   InstallmentQuote,
   InstallmentQuoteInput,
   KycReviewInput,
+  LandlordKycInput,
+  LandlordKycReviewResult,
+  LandlordKycStatus,
   ListComplaints200,
   ListProperties200,
   ListPropertiesParams,
@@ -59,6 +63,7 @@ import type {
   Property,
   PropertyInput,
   PublicConfig,
+  ReviewLandlordKycInput,
   SpecialRequest,
   SpecialRequestInput,
   StatusResult,
@@ -1616,12 +1621,265 @@ export function useGetPayoutDestination<TData = Awaited<ReturnType<typeof getPay
 
 
 
+export const getGetLandlordKycUrl = () => {
+
+
+
+
+  return `/api/landlord-kyc`
+}
+
+/**
+ * @summary Get the signed-in landlord's KYC and indemnity status
+ */
+export const getLandlordKyc = async ( options?: Parameters<typeof customFetch>[1]): Promise<LandlordKycStatus> => {
+
+  return customFetch<LandlordKycStatus>(getGetLandlordKycUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLandlordKycQueryKey = () => {
+    return [
+    `/api/landlord-kyc`
+    ] as const;
+    }
+
+
+export const getGetLandlordKycQueryOptions = <TData = Awaited<ReturnType<typeof getLandlordKyc>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandlordKyc>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLandlordKycQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLandlordKyc>>> = ({ signal }) => getLandlordKyc({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLandlordKyc>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLandlordKycQueryResult = NonNullable<Awaited<ReturnType<typeof getLandlordKyc>>>
+export type GetLandlordKycQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the signed-in landlord's KYC and indemnity status
+ */
+
+export function useGetLandlordKyc<TData = Awaited<ReturnType<typeof getLandlordKyc>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLandlordKyc>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLandlordKycQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitLandlordKycUrl = () => {
+
+
+
+
+  return `/api/landlord-kyc`
+}
+
+/**
+ * @summary Submit encrypted landlord identity and ownership documents
+ */
+export const submitLandlordKyc = async (landlordKycInput: LandlordKycInput, options?: Parameters<typeof customFetch>[1]): Promise<LandlordKycStatus> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<LandlordKycStatus>(getSubmitLandlordKycUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(landlordKycInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitLandlordKycMutationKey = () => ['submitLandlordKyc'] as const;
+
+export const getSubmitLandlordKycMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitLandlordKyc>>, TError,SubmitLandlordKycMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitLandlordKyc>>, TError,SubmitLandlordKycMutationVariables, TContext> => {
+
+const mutationKey = getSubmitLandlordKycMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitLandlordKyc>>, SubmitLandlordKycMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitLandlordKyc(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitLandlordKycMutationResult = NonNullable<Awaited<ReturnType<typeof submitLandlordKyc>>>
+    export type SubmitLandlordKycMutationBody = BodyType<LandlordKycInput>
+    export type SubmitLandlordKycMutationError = ErrorType<unknown>
+    export type SubmitLandlordKycMutationVariables = {data: BodyType<LandlordKycInput>}
+
+    /**
+ * @summary Submit encrypted landlord identity and ownership documents
+ */
+export const useSubmitLandlordKyc = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitLandlordKyc>>, TError,SubmitLandlordKycMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitLandlordKyc>>,
+        TError,
+        SubmitLandlordKycMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitLandlordKycMutationOptions(options));
+    }
+
+export const getSaveLandlordPayoutAccountUrl = () => {
+
+
+
+
+  return `/api/payouts/account`
+}
+
+/**
+ * @summary Save payout account after landlord indemnity has been signed
+ */
+export const saveLandlordPayoutAccount = async (payoutDestinationInput: PayoutDestinationInput, options?: Parameters<typeof customFetch>[1]): Promise<PayoutDestination> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PayoutDestination>(getSaveLandlordPayoutAccountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(payoutDestinationInput)
+  }
+);}
+
+
+
+
+
+export const getSaveLandlordPayoutAccountMutationKey = () => ['saveLandlordPayoutAccount'] as const;
+
+export const getSaveLandlordPayoutAccountMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveLandlordPayoutAccount>>, TError,SaveLandlordPayoutAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveLandlordPayoutAccount>>, TError,SaveLandlordPayoutAccountMutationVariables, TContext> => {
+
+const mutationKey = getSaveLandlordPayoutAccountMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveLandlordPayoutAccount>>, SaveLandlordPayoutAccountMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  saveLandlordPayoutAccount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveLandlordPayoutAccountMutationResult = NonNullable<Awaited<ReturnType<typeof saveLandlordPayoutAccount>>>
+    export type SaveLandlordPayoutAccountMutationBody = BodyType<PayoutDestinationInput>
+    export type SaveLandlordPayoutAccountMutationError = ErrorType<Error>
+    export type SaveLandlordPayoutAccountMutationVariables = {data: BodyType<PayoutDestinationInput>}
+
+    /**
+ * @summary Save payout account after landlord indemnity has been signed
+ */
+export const useSaveLandlordPayoutAccount = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveLandlordPayoutAccount>>, TError,SaveLandlordPayoutAccountMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveLandlordPayoutAccount>>,
+        TError,
+        SaveLandlordPayoutAccountMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSaveLandlordPayoutAccountMutationOptions(options));
+    }
+
 export const getSavePayoutDestinationUrl = () => {
 
 
 
 
-  return `/api/account/payout-destination`
+  return `/api/payouts/account`
 }
 
 /**
@@ -2451,6 +2709,172 @@ export function useListAdminKycQueue<TData = Awaited<ReturnType<typeof listAdmin
 
 
 
+
+export const getListAdminLandlordKycQueueUrl = () => {
+
+
+
+
+  return `/api/admin/queues/landlord-kyc`
+}
+
+/**
+ * @summary List landlord KYC applications for review
+ */
+export const listAdminLandlordKycQueue = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminLandlordKycQueue> => {
+
+  return customFetch<AdminLandlordKycQueue>(getListAdminLandlordKycQueueUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminLandlordKycQueueQueryKey = () => {
+    return [
+    `/api/admin/queues/landlord-kyc`
+    ] as const;
+    }
+
+
+export const getListAdminLandlordKycQueueQueryOptions = <TData = Awaited<ReturnType<typeof listAdminLandlordKycQueue>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLandlordKycQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminLandlordKycQueueQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminLandlordKycQueue>>> = ({ signal }) => listAdminLandlordKycQueue({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminLandlordKycQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminLandlordKycQueueQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminLandlordKycQueue>>>
+export type ListAdminLandlordKycQueueQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List landlord KYC applications for review
+ */
+
+export function useListAdminLandlordKycQueue<TData = Awaited<ReturnType<typeof listAdminLandlordKycQueue>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminLandlordKycQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminLandlordKycQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewLandlordKycUrl = (userId: string,) => {
+
+
+
+
+  return `/api/admin/landlord-kyc/${userId}/review`
+}
+
+/**
+ * @summary Approve or reject a landlord KYC application
+ */
+export const reviewLandlordKyc = async (userId: string,
+    reviewLandlordKycInput: ReviewLandlordKycInput, options?: Parameters<typeof customFetch>[1]): Promise<LandlordKycReviewResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<LandlordKycReviewResult>(getReviewLandlordKycUrl(userId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(reviewLandlordKycInput)
+  }
+);}
+
+
+
+
+
+export const getReviewLandlordKycMutationKey = () => ['reviewLandlordKyc'] as const;
+
+export const getReviewLandlordKycMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewLandlordKyc>>, TError,ReviewLandlordKycMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewLandlordKyc>>, TError,ReviewLandlordKycMutationVariables, TContext> => {
+
+const mutationKey = getReviewLandlordKycMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewLandlordKyc>>, ReviewLandlordKycMutationVariables> = (props) => {
+          const {userId,data} = props ?? {};
+
+          return  reviewLandlordKyc(userId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewLandlordKycMutationResult = NonNullable<Awaited<ReturnType<typeof reviewLandlordKyc>>>
+    export type ReviewLandlordKycMutationBody = BodyType<ReviewLandlordKycInput>
+    export type ReviewLandlordKycMutationError = ErrorType<unknown>
+    export type ReviewLandlordKycMutationVariables = {userId: string;data: BodyType<ReviewLandlordKycInput>}
+
+    /**
+ * @summary Approve or reject a landlord KYC application
+ */
+export const useReviewLandlordKyc = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewLandlordKyc>>, TError,ReviewLandlordKycMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewLandlordKyc>>,
+        TError,
+        ReviewLandlordKycMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReviewLandlordKycMutationOptions(options));
+    }
 
 export const getListAdminEscrowQueueUrl = () => {
 

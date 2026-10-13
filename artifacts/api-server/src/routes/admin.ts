@@ -4,6 +4,7 @@ import {
   ListAdminEscrowQueueResponse,
   ListAdminHotelVerificationQueueResponse,
   ListAdminKycQueueResponse,
+  ListAdminLandlordKycQueueResponse,
   GetAdminDashboardResponse,
   ReleaseEscrowParams,
   ReviewHotelVerificationBody,
@@ -11,6 +12,9 @@ import {
   ReviewHotelVerificationResponse,
   ReviewKycBody,
   ReviewKycParams,
+  ReviewLandlordKycParams,
+  ReviewLandlordKycBody,
+  ReviewLandlordKycResponse,
   ReviewPropertyDelistingBody,
   ReviewPropertyDelistingParams,
   UpdateComplaintStatusBody,
@@ -125,6 +129,73 @@ router.get("/admin/queues/kyc", requireAuth, async (req, res): Promise<void> => 
       };
     });
   res.json(ListAdminKycQueueResponse.parse({ items }));
+});
+
+router.get("/admin/queues/landlord-kyc", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const rows = await supabaseRest<DbRow[]>(
+    "landlord_kyc?select=user_id,nin_last4,nin_verified,indemnity_signed,review_status,property_doc_url,affidavit_url,signed_at,created_at,profiles(full_name)&review_status=eq.pending&order=created_at.asc&limit=250",
+  );
+  res.json(
+    ListAdminLandlordKycQueueResponse.parse({
+      items: rows.map((row) => {
+        const profile = row["profiles"] as DbRow | null;
+        const last4 = String(row["nin_last4"] ?? "");
+        return {
+          userId: String(row["user_id"]),
+          fullName: String(profile?.["full_name"] ?? "Landlord"),
+          maskedNin: last4.length === 4 ? `*******${last4}` : undefined,
+          ninVerified: Boolean(row["nin_verified"]),
+          indemnitySigned: Boolean(row["indemnity_signed"]),
+          reviewStatus: String(row["review_status"]),
+          propertyDocUrl: String(row["property_doc_url"] ?? ""),
+          affidavitUrl: String(row["affidavit_url"] ?? ""),
+          signedAt: row["signed_at"] ? String(row["signed_at"]) : undefined,
+          createdAt: String(row["created_at"]),
+        };
+      }),
+    }),
+  );
+});
+
+router.post("/admin/landlord-kyc/:userId/review", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const params = ReviewLandlordKycParams.safeParse(req.params);
+  const body = ReviewLandlordKycBody.safeParse(req.body);
+  if (!params.success || !body.success) {
+    res.status(400).json({ message: "Choose approved or rejected for this landlord KYC application." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const reviewedAt = new Date().toISOString();
+  const rows = await supabaseRest<DbRow[]>(
+    `landlord_kyc?user_id=eq.${encodeURIComponent(params.data.userId)}&review_status=eq.pending&select=user_id`,
+    {
+      method: "PATCH",
+      body: {
+        review_status: body.data.decision,
+        admin_note: body.data.adminNote?.trim() || null,
+        reviewed_by: user.id,
+        reviewed_at: reviewedAt,
+        updated_at: reviewedAt,
+      },
+      prefer: "return=representation",
+    },
+  );
+  if (!rows.length) {
+    res.status(404).json({ message: "Pending landlord KYC application not found." });
+    return;
+  }
+  await supabaseRest(`profiles?id=eq.${encodeURIComponent(params.data.userId)}`, {
+    method: "PATCH",
+    body: {
+      verification_status: body.data.decision === "approved" ? "verified" : "rejected",
+      updated_at: reviewedAt,
+    },
+    prefer: "return=minimal",
+  });
+  res.json(ReviewLandlordKycResponse.parse({ status: body.data.decision }));
 });
 
 router.get("/admin/queues/escrow", requireAuth, async (req, res): Promise<void> => {

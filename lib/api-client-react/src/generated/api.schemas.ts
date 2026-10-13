@@ -457,6 +457,109 @@ export interface PayoutDestinationInput {
   accountNumber: string;
 }
 
+export interface LandlordKycInput {
+  /** @pattern ^[0-9]{11}$ */
+  ninNumber: string;
+  /**
+     * @minLength 2
+     * @maxLength 160
+     */
+  ninName: string;
+  /**
+     * @minLength 5
+     * @maxLength 500
+     */
+  propertyAddress: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  propertyDocUrl: string;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  affidavitUrl: string;
+  indemnitySigned: true;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  indemnityTextVersion: string;
+}
+
+export type LandlordKycStatusReviewStatus = typeof LandlordKycStatusReviewStatus[keyof typeof LandlordKycStatusReviewStatus];
+
+
+export const LandlordKycStatusReviewStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface LandlordKycStatus {
+  submitted: boolean;
+  ninVerified: boolean;
+  indemnitySigned: boolean;
+  maskedNin?: string;
+  reviewStatus?: LandlordKycStatusReviewStatus;
+  propertyDocUrl?: string;
+  affidavitUrl?: string;
+  signedAt?: string;
+}
+
+export type AdminLandlordKycQueueItemsItemReviewStatus = typeof AdminLandlordKycQueueItemsItemReviewStatus[keyof typeof AdminLandlordKycQueueItemsItemReviewStatus];
+
+
+export const AdminLandlordKycQueueItemsItemReviewStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export type AdminLandlordKycQueueItemsItem = {
+  userId: string;
+  fullName: string;
+  maskedNin?: string;
+  ninVerified: boolean;
+  indemnitySigned: boolean;
+  reviewStatus: AdminLandlordKycQueueItemsItemReviewStatus;
+  propertyDocUrl?: string;
+  affidavitUrl?: string;
+  signedAt?: string;
+  createdAt: string;
+};
+
+export interface AdminLandlordKycQueue {
+  items: AdminLandlordKycQueueItemsItem[];
+}
+
+export type ReviewLandlordKycInputDecision = typeof ReviewLandlordKycInputDecision[keyof typeof ReviewLandlordKycInputDecision];
+
+
+export const ReviewLandlordKycInputDecision = {
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface ReviewLandlordKycInput {
+  decision: ReviewLandlordKycInputDecision;
+  /** @maxLength 1000 */
+  adminNote?: string;
+}
+
+export type LandlordKycReviewResultStatus = typeof LandlordKycReviewResultStatus[keyof typeof LandlordKycReviewResultStatus];
+
+
+export const LandlordKycReviewResultStatus = {
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface LandlordKycReviewResult {
+  status: LandlordKycReviewResultStatus;
+}
+
 export type FeeQuoteInputTransactionType = typeof FeeQuoteInputTransactionType[keyof typeof FeeQuoteInputTransactionType];
 
 

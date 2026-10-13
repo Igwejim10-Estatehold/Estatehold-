@@ -1,10 +1,13 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreateTenancyAgreementBody,
   CreateTenancyAgreementResponse,
   GetProfileResponse,
   GetPayoutBanksResponse,
   GetPayoutDestinationResponse,
+  GetLandlordKycResponse,
+  SubmitLandlordKycBody,
+  SubmitLandlordKycResponse,
   SavePayoutDestinationBody,
   SavePayoutDestinationResponse,
   UpdateProfileBody,
@@ -13,6 +16,7 @@ import {
 import { getUserRole, requireAuth, requireUser } from "../lib/auth";
 import { loadProfile, mapProfile, type DbRow } from "../lib/estatehold";
 import { encryptPayoutDetails } from "../lib/payout-encryption";
+import { encryptLandlordNin, maskNin } from "../lib/landlord-kyc-encryption";
 import { loadVerifiedPayoutDestination } from "../lib/payout-destinations";
 import { supabaseRest } from "../lib/supabase";
 
@@ -73,7 +77,92 @@ router.get("/account/payout-destination", requireAuth, async (req, res): Promise
   );
 });
 
-router.put("/account/payout-destination", requireAuth, async (req, res): Promise<void> => {
+const LANDLORD_INDEMNITY_TEXT_VERSION = "2026-10-14-v1";
+
+function mapLandlordKycStatus(row?: DbRow) {
+  if (!row) return { submitted: false, ninVerified: false, indemnitySigned: false };
+  return {
+    submitted: true,
+    ninVerified: Boolean(row["nin_verified"]),
+    indemnitySigned: Boolean(row["indemnity_signed"]),
+    maskedNin: typeof row["nin_last4"] === "string" ? maskNin(row["nin_last4"]) : undefined,
+    reviewStatus: row["review_status"] ?? "pending",
+    propertyDocUrl: row["property_doc_url"] ?? undefined,
+    affidavitUrl: row["affidavit_url"] ?? undefined,
+    signedAt: row["signed_at"] ?? undefined,
+  };
+}
+
+router.get("/landlord-kyc", requireAuth, async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if ((await getUserRole(user.id)) !== "landlord") {
+    res.status(403).json({ message: "Landlord verification is only available to landlord accounts." });
+    return;
+  }
+  const rows = await supabaseRest<DbRow[]>(
+    `landlord_kyc?user_id=eq.${encodeURIComponent(user.id)}&select=nin_last4,nin_verified,indemnity_signed,review_status,property_doc_url,affidavit_url,signed_at&limit=1`,
+  );
+  res.json(GetLandlordKycResponse.parse(mapLandlordKycStatus(rows[0])));
+});
+
+router.post("/landlord-kyc", requireAuth, async (req, res): Promise<void> => {
+  const parsed = SubmitLandlordKycBody.safeParse(req.body);
+  if (!parsed.success || parsed.data.indemnityTextVersion !== LANDLORD_INDEMNITY_TEXT_VERSION) {
+    res.status(400).json({ message: "Complete the landlord KYC form and sign the current indemnity." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if ((await getUserRole(user.id)) !== "landlord") {
+    res.status(403).json({ message: "Landlord verification is only available to landlord accounts." });
+    return;
+  }
+  const isPrivateUserPath = (value: string) =>
+    value.startsWith(`${user.id}/`) && !value.split("/").includes("..") && !value.startsWith("/");
+  if (!isPrivateUserPath(parsed.data.propertyDocUrl) || !isPrivateUserPath(parsed.data.affidavitUrl)) {
+    res.status(400).json({ message: "Upload both documents to your private KYC folder before submitting." });
+    return;
+  }
+  const signedAt = new Date().toISOString();
+  const encrypted = encryptLandlordNin(parsed.data.ninNumber);
+  await supabaseRest("landlord_kyc?on_conflict=user_id", {
+    method: "POST",
+    body: {
+      user_id: user.id,
+      nin_number_encrypted: encrypted.ciphertext,
+      nin_iv: encrypted.iv,
+      nin_auth_tag: encrypted.authTag,
+      nin_last4: parsed.data.ninNumber.slice(-4),
+      nin_verified: false,
+      nin_name: parsed.data.ninName.trim(),
+      property_address: parsed.data.propertyAddress.trim(),
+      property_doc_url: parsed.data.propertyDocUrl,
+      affidavit_url: parsed.data.affidavitUrl,
+      indemnity_signed: true,
+      indemnity_text_version: LANDLORD_INDEMNITY_TEXT_VERSION,
+      ip_address: req.ip,
+      signed_at: signedAt,
+      review_status: "pending",
+      updated_at: signedAt,
+    },
+    prefer: "resolution=merge-duplicates,return=minimal",
+  });
+  res.json(
+    SubmitLandlordKycResponse.parse({
+      submitted: true,
+      ninVerified: false,
+      indemnitySigned: true,
+      maskedNin: maskNin(parsed.data.ninNumber.slice(-4)),
+      reviewStatus: "pending",
+      propertyDocUrl: parsed.data.propertyDocUrl,
+      affidavitUrl: parsed.data.affidavitUrl,
+      signedAt,
+    }),
+  );
+});
+
+const payoutDestinationHandler = async (req: Request, res: Response): Promise<void> => {
   const parsed = SavePayoutDestinationBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Enter a Nigerian bank and a valid 10-digit account number." });
@@ -81,6 +170,15 @@ router.put("/account/payout-destination", requireAuth, async (req, res): Promise
   }
   const user = await requireUser(req, res);
   if (!user) return;
+  if ((await getUserRole(user.id)) === "landlord") {
+    const kyc = await supabaseRest<DbRow[]>(
+      `landlord_kyc?user_id=eq.${encodeURIComponent(user.id)}&select=indemnity_signed&limit=1`,
+    );
+    if (!Boolean(kyc[0]?.["indemnity_signed"])) {
+      res.status(403).json({ message: "Sign the landlord indemnity before adding a payout account." });
+      return;
+    }
+  }
   const secretKey = getPaystackSecret();
   if (!secretKey) {
     res.status(503).json({ message: "Paystack account verification is not configured." });
@@ -171,7 +269,10 @@ router.put("/account/payout-destination", requireAuth, async (req, res): Promise
       accountLast4: accountNumber.slice(-4),
     }),
   );
-});
+};
+
+router.put("/account/payout-destination", requireAuth, payoutDestinationHandler);
+router.post("/payouts/account", requireAuth, payoutDestinationHandler);
 
 router.get("/account/profile", requireAuth, async (req, res): Promise<void> => {
   const user = await requireUser(req, res);
