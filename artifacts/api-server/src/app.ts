@@ -7,6 +7,13 @@ import { SupabaseRequestError } from "./lib/supabase";
 
 const app: Express = express();
 
+logger.info({
+  supabaseUrlSet: Boolean(process.env["SUPABASE_URL"]?.trim()),
+  supabaseAnonKeySet: Boolean(process.env["SUPABASE_ANON_KEY"]?.trim()),
+  supabaseServiceRoleKeySet: Boolean(process.env["SUPABASE_SERVICE_ROLE_KEY"]?.trim()),
+  databaseUrlSet: Boolean(process.env["DATABASE_URL"]?.trim()),
+}, "Supabase environment variable presence");
+
 app.use(
   pinoHttp({
     logger,

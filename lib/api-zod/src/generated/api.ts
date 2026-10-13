@@ -17,6 +17,19 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Verify Supabase connectivity
+ */
+export const supabaseHealthCheckResponseLatencyMin = 0;
+
+
+
+export const SupabaseHealthCheckResponse = zod.object({
+  "supabase": zod.enum(['connected', 'failed']),
+  "latency": zod.number().int().min(supabaseHealthCheckResponseLatencyMin)
+})
+
+
+/**
  * @summary Public browser configuration
  */
 export const GetPublicConfigResponse = zod.object({
@@ -42,6 +55,7 @@ export const getDashboardResponseItemsItemSizeSqmMin = 0;
 
 
 export const GetDashboardResponse = zod.object({
+  "dataSource": zod.enum(['live', 'mock']).optional(),
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),
@@ -57,6 +71,57 @@ export const GetDashboardResponse = zod.object({
   "bedrooms": zod.number().int().min(getDashboardResponseItemsItemBedroomsMin).optional(),
   "bathrooms": zod.number().int().min(getDashboardResponseItemsItemBathroomsMin).optional(),
   "sizeSqm": zod.number().int().min(getDashboardResponseItemsItemSizeSqmMin).optional(),
+  "latitude": zod.number().optional(),
+  "longitude": zod.number().optional(),
+  "imageUrl": zod.string().optional(),
+  "pinStatus": zod.enum(['verified', 'pending', 'dispute', 'tenant_protected']),
+  "isManaged": zod.boolean().optional(),
+  "isExclusive": zod.boolean(),
+  "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
+})),
+  "location": zod.string(),
+  "greeting": zod.string()
+})
+
+
+/**
+ * @summary Dashboard content and property stats
+ */
+export const getDashboardStatsResponseItemsItemPriceNairaMin = 0;
+
+export const getDashboardStatsResponseItemsItemBedroomsMin = 0;
+
+export const getDashboardStatsResponseItemsItemBathroomsMin = 0;
+
+export const getDashboardStatsResponseItemsItemSizeSqmMin = 0;
+
+
+
+export const GetDashboardStatsResponse = zod.object({
+  "dataSource": zod.enum(['live', 'mock']).optional(),
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
+  "customType": zod.string().optional(),
+  "state": zod.string(),
+  "town": zod.string(),
+  "address": zod.string().optional(),
+  "description": zod.string().optional(),
+  "priceNaira": zod.number().int().min(getDashboardStatsResponseItemsItemPriceNairaMin),
+  "priceUnit": zod.string().optional(),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
+  "bedrooms": zod.number().int().min(getDashboardStatsResponseItemsItemBedroomsMin).optional(),
+  "bathrooms": zod.number().int().min(getDashboardStatsResponseItemsItemBathroomsMin).optional(),
+  "sizeSqm": zod.number().int().min(getDashboardStatsResponseItemsItemSizeSqmMin).optional(),
   "latitude": zod.number().optional(),
   "longitude": zod.number().optional(),
   "imageUrl": zod.string().optional(),
@@ -100,6 +165,7 @@ export const listPropertiesResponseItemsItemSizeSqmMin = 0;
 
 
 export const ListPropertiesResponse = zod.object({
+  "dataSource": zod.enum(['live', 'mock']).optional(),
   "items": zod.array(zod.object({
   "id": zod.string(),
   "title": zod.string(),

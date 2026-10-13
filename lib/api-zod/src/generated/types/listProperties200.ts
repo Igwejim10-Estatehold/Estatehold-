@@ -5,8 +5,10 @@
  * Estatehold property marketplace API
  * OpenAPI spec version: 0.2.0
  */
+import type { ListProperties200DataSource } from './listProperties200DataSource';
 import type { Property } from './property';
 
 export type ListProperties200 = {
+  dataSource?: ListProperties200DataSource;
   items: Property[];
 };

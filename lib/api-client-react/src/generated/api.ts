@@ -62,6 +62,7 @@ import type {
   SpecialRequest,
   SpecialRequestInput,
   StatusResult,
+  SupabaseHealth,
   Transaction,
   TransactionInput
 } from './api.schemas';
@@ -158,6 +159,83 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSupabaseHealthCheckUrl = () => {
+
+
+
+
+  return `/api/health/supabase`
+}
+
+/**
+ * @summary Verify Supabase connectivity
+ */
+export const supabaseHealthCheck = async ( options?: Parameters<typeof customFetch>[1]): Promise<SupabaseHealth> => {
+
+  return customFetch<SupabaseHealth>(getSupabaseHealthCheckUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSupabaseHealthCheckQueryKey = () => {
+    return [
+    `/api/health/supabase`
+    ] as const;
+    }
+
+
+export const getSupabaseHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof supabaseHealthCheck>>, TError = ErrorType<SupabaseHealth>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof supabaseHealthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSupabaseHealthCheckQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof supabaseHealthCheck>>> = ({ signal }) => supabaseHealthCheck({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof supabaseHealthCheck>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SupabaseHealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof supabaseHealthCheck>>>
+export type SupabaseHealthCheckQueryError = ErrorType<SupabaseHealth>
+
+
+/**
+ * @summary Verify Supabase connectivity
+ */
+
+export function useSupabaseHealthCheck<TData = Awaited<ReturnType<typeof supabaseHealthCheck>>, TError = ErrorType<SupabaseHealth>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof supabaseHealthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSupabaseHealthCheckQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -312,6 +390,83 @@ export function useGetDashboard<TData = Awaited<ReturnType<typeof getDashboard>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetDashboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDashboardStatsUrl = () => {
+
+
+
+
+  return `/api/dashboard/stats`
+}
+
+/**
+ * @summary Dashboard content and property stats
+ */
+export const getDashboardStats = async ( options?: Parameters<typeof customFetch>[1]): Promise<Dashboard> => {
+
+  return customFetch<Dashboard>(getGetDashboardStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDashboardStatsQueryKey = () => {
+    return [
+    `/api/dashboard/stats`
+    ] as const;
+    }
+
+
+export const getGetDashboardStatsQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardStats>>> = ({ signal }) => getDashboardStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDashboardStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDashboardStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getDashboardStats>>>
+export type GetDashboardStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Dashboard content and property stats
+ */
+
+export function useGetDashboardStats<TData = Awaited<ReturnType<typeof getDashboardStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDashboardStatsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

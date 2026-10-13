@@ -9,6 +9,20 @@ export interface HealthStatus {
   status: string;
 }
 
+export type SupabaseHealthSupabase = typeof SupabaseHealthSupabase[keyof typeof SupabaseHealthSupabase];
+
+
+export const SupabaseHealthSupabase = {
+  connected: 'connected',
+  failed: 'failed',
+} as const;
+
+export interface SupabaseHealth {
+  supabase: SupabaseHealthSupabase;
+  /** @minimum 0 */
+  latency: number;
+}
+
 export type PublicConfigPaymentMode = typeof PublicConfigPaymentMode[keyof typeof PublicConfigPaymentMode];
 
 
@@ -164,7 +178,16 @@ export interface PropertyInput {
   hotelSafetyCheckinAvailable?: boolean;
 }
 
+export type DashboardDataSource = typeof DashboardDataSource[keyof typeof DashboardDataSource];
+
+
+export const DashboardDataSource = {
+  live: 'live',
+  mock: 'mock',
+} as const;
+
 export interface Dashboard {
+  dataSource?: DashboardDataSource;
   items: Property[];
   location: string;
   greeting: string;
@@ -800,7 +823,16 @@ export const ListPropertiesIntent = {
   social: 'social',
 } as const;
 
+export type ListProperties200DataSource = typeof ListProperties200DataSource[keyof typeof ListProperties200DataSource];
+
+
+export const ListProperties200DataSource = {
+  live: 'live',
+  mock: 'mock',
+} as const;
+
 export type ListProperties200 = {
+  dataSource?: ListProperties200DataSource;
   items: Property[];
 };
 

@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreatePropertyBody,
   CreatePropertyResponse,
@@ -21,9 +21,46 @@ import {
   type DbProperty,
   type DbRow,
 } from "../lib/estatehold";
-import { getPublicConfig, supabaseRest } from "../lib/supabase";
+import { getPublicConfig, SupabaseRequestError, supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+const OFFLINE_DEMO_ROWS: DbProperty[] = [
+  {
+    id: "offline-demo-serene-home",
+    title: "DEMO ONLY — Serene Estate Enugu",
+    category: "home",
+    state: "Enugu",
+    town: "Emene",
+    address: "Sample location; not a real listing",
+    description: "Offline sample only. This is not a live property, and all ownership, location, and title details are unverified.",
+    price_naira: 45000000,
+    price_unit: "total",
+    intent: "sale",
+    bedrooms: 4,
+    bathrooms: 3,
+    size_sqm: 320,
+    gps_lat: 6.474,
+    gps_lng: 7.56,
+    pin_status: "pending",
+    is_managed: false,
+    is_exclusive: false,
+    is_locked: false,
+    listing_moderation_status: "pending",
+    hotel_verification_status: "not_applicable",
+  },
+];
+
+async function loadPropertiesWithSource(): Promise<{ rows: DbProperty[]; dataSource: "live" | "mock" }> {
+  try {
+    return { rows: await loadBrowseableProperties(), dataSource: "live" };
+  } catch (error) {
+    if (error instanceof SupabaseRequestError && error.code === "CONNECTION_FAILED") {
+      return { rows: OFFLINE_DEMO_ROWS, dataSource: "mock" };
+    }
+    throw error;
+  }
+}
 
 function greetingForLagos(): string {
   const hour = Number(
@@ -43,9 +80,9 @@ router.get("/config", (_req, res) => {
   res.json(GetPublicConfigResponse.parse(getPublicConfig()));
 });
 
-router.get("/dashboard", async (req, res): Promise<void> => {
-  const rows = await loadBrowseableProperties();
-  const user = await optionalUser(req);
+const dashboardHandler = async (req: Request, res: Response): Promise<void> => {
+  const { rows, dataSource } = await loadPropertiesWithSource();
+  const user = dataSource === "live" ? await optionalUser(req) : null;
   let location = "Enugu, Nigeria";
   if (user) {
     const profile = await loadProfile(user.id);
@@ -54,12 +91,16 @@ router.get("/dashboard", async (req, res): Promise<void> => {
     if (town || state) location = [town, state].filter(Boolean).join(", ");
   }
   const response = GetDashboardResponse.parse({
+    dataSource,
     items: rows.slice(0, 6).map(mapProperty),
     location,
     greeting: greetingForLagos(),
   });
   res.json(response);
-});
+};
+
+router.get("/dashboard", dashboardHandler);
+router.get("/dashboard/stats", dashboardHandler);
 
 router.get("/properties", async (req, res): Promise<void> => {
   const parsed = ListPropertiesQueryParams.safeParse(req.query);
@@ -69,7 +110,7 @@ router.get("/properties", async (req, res): Promise<void> => {
   }
 
   const filters = parsed.data;
-  const rows = await loadBrowseableProperties();
+  const { rows, dataSource } = await loadPropertiesWithSource();
   const search = filters.search?.trim().toLocaleLowerCase();
   const items = rows
     .filter((row) => !filters.category || row.category === filters.category)
@@ -88,7 +129,7 @@ router.get("/properties", async (req, res): Promise<void> => {
         .some((value) => String(value ?? "").toLocaleLowerCase().includes(search));
     })
     .map(mapProperty);
-  res.json(ListPropertiesResponse.parse({ items }));
+  res.json(ListPropertiesResponse.parse({ items, dataSource }));
 });
 
 router.post(

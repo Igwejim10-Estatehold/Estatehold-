@@ -1,3 +1,5 @@
+import { logger } from "./logger";
+
 type SupabaseRequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
@@ -78,14 +80,32 @@ async function requestJson<T>(
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (options.prefer) headers.set("Prefer", options.prefer);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: options.method ?? "GET",
-      headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
-  } catch {
+  const method = options.method ?? "GET";
+  const attempts = method === "GET" ? 3 : 1;
+  let response: Response | undefined;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      response = await fetch(url, {
+        method,
+        headers,
+        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (response.status < 500 || attempt === attempts) break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) {
+        const cause = error instanceof Error ? (error as Error & { cause?: { code?: unknown } }).cause : undefined;
+        const causeCode = typeof cause?.code === "string" ? cause.code : undefined;
+        logger.error({ errorName: error instanceof Error ? error.name : "UnknownError", causeCode, attempts }, "Supabase read connection failed");
+        throw new SupabaseRequestError(503, "CONNECTION_FAILED");
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+  }
+  if (!response) {
+    logger.error({ errorName: lastError instanceof Error ? lastError.name : "UnknownError" }, "Supabase returned no response");
     throw new SupabaseRequestError(503, "CONNECTION_FAILED");
   }
 

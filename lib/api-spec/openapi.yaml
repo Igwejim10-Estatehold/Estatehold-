@@ -29,6 +29,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /health/supabase:
+    get:
+      operationId: supabaseHealthCheck
+      tags: [health]
+      summary: Verify Supabase connectivity
+      responses:
+        "200":
+          description: Supabase is reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupabaseHealth"
+        "503":
+          description: Supabase is unreachable or required schema is unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupabaseHealth"
   /config:
     get:
       operationId: getPublicConfig
@@ -46,6 +64,18 @@ paths:
       operationId: getDashboard
       tags: [marketplace]
       summary: Home dashboard content
+      responses:
+        "200":
+          description: Dashboard content
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [marketplace]
+      summary: Dashboard content and property stats
       responses:
         "200":
           description: Dashboard content
@@ -89,6 +119,9 @@ paths:
                 type: object
                 required: [items]
                 properties:
+                  dataSource:
+                    type: string
+                    enum: [live, mock]
                   items:
                     type: array
                     items:
@@ -719,6 +752,16 @@ components:
       properties:
         status:
           type: string
+    SupabaseHealth:
+      type: object
+      required: [supabase, latency]
+      properties:
+        supabase:
+          type: string
+          enum: [connected, failed]
+        latency:
+          type: integer
+          minimum: 0
     PublicConfig:
       type: object
       required: [supabaseUrl, supabaseAnonKey, googleMapsApiKey, paystackPublicKey, paymentMode]
@@ -804,6 +847,9 @@ components:
       type: object
       required: [items, location, greeting]
       properties:
+        dataSource:
+          type: string
+          enum: [live, mock]
         items:
           type: array
           items: { $ref: "#/components/schemas/Property" }

@@ -5,9 +5,11 @@
  * Estatehold property marketplace API
  * OpenAPI spec version: 0.2.0
  */
+import type { DashboardDataSource } from './dashboardDataSource';
 import type { Property } from './property';
 
 export interface Dashboard {
+  dataSource?: DashboardDataSource;
   items: Property[];
   location: string;
   greeting: string;

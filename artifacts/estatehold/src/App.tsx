@@ -18,7 +18,7 @@ import {
   useListComplaints, useListProperties, useListSocialHousingUnits, useListSpecialRequests, useReleaseEscrow,
   useRequestPropertyDelisting, useUpdateProfile,
 } from '@workspace/api-client-react';
-import type { ComplaintInput, FeeQuote, InstallmentQuote, ListSocialHousingUnits200, ListSpecialRequests200, PayoutBank, PayoutDestination, ProcessingFeeSchedule, Property, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
+import type { ComplaintInput, FeeQuote, InstallmentQuote, ListProperties200, ListSocialHousingUnits200, ListSpecialRequests200, PayoutBank, PayoutDestination, ProcessingFeeSchedule, Property, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
 import {
   Activity, ArrowLeft, ArrowRight, BadgeCheck, Building2, Calculator, Check, ChevronDown, ChevronRight,
   CircleAlert, Compass, FileCheck2, FileText, HeartHandshake, Home, Landmark, LifeBuoy,
@@ -94,6 +94,7 @@ function PropertyCard({ property }: { property: Property }) {
     <div className="relative h-48 overflow-hidden bg-[#e9eee8]">{property.imageUrl ? <img src={property.imageUrl} alt={property.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"/> :
       <div className="flex h-full items-center justify-center bg-[radial-gradient(ellipse_at_75%_16%,#d3e6d4,transparent_38%),linear-gradient(135deg,#edf3e9,#dce8de)]"><Building2 size={46} strokeWidth={1.2} className="text-[#7e9984]"/></div>}
       <span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-[11px] font-bold uppercase tracking-[.12em] text-[#31513a]">{property.intent === 'rent' ? 'For rent' : property.intent === 'lease' ? 'For lease' : property.intent === 'social' ? 'Shared home' : 'For sale'}</span>
+      {property.id.startsWith('offline-demo-') && <span className="absolute bottom-3 left-3 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wide text-amber-900">Demo sample · not live</span>}
       <span className={`absolute right-3 top-3 flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${property.pinStatus === 'verified' || property.pinStatus === 'tenant_protected' ? 'bg-[#e8f5e9] text-[#1d7938]' : property.pinStatus === 'dispute' ? 'bg-[#fff0ec] text-[#9a4436]' : 'bg-white text-[#64756a]'}`}><MapPin size={12}/>{property.pinStatus === 'verified' ? 'Location verified' : property.pinStatus === 'tenant_protected' ? 'Tenant protected' : property.pinStatus === 'dispute' ? 'Pin disputed' : 'Pin pending'}</span>
       {property.isLocked && <span className="absolute bottom-3 left-3 flex items-center gap-1 rounded-full bg-[#0B0F0E]/85 px-2.5 py-1 text-[11px] font-bold text-white"><LockKeyhole size={11}/>Locked listing</span>}
     </div>
@@ -179,6 +180,11 @@ function AppContent() {
     }
   }, [config.data?.googleMapsApiKey]);
   useEffect(() => { setNotice(''); }, [location]);
+  useEffect(() => {
+    if (dashboard.data?.dataSource === 'mock' || propertiesQuery.data?.dataSource === 'mock') {
+      setNotice('Live data offline — showing clearly labeled demo properties.');
+    }
+  }, [dashboard.data?.dataSource, propertiesQuery.data?.dataSource]);
   const items = dashboard.data?.items || propertiesQuery.data?.items || [];
   const filteredProperties = useMemo(() => propertiesQuery.data?.items || [], [propertiesQuery.data]);
   const profileTown = profile.data?.town || dashboard.data?.location || 'your area';
@@ -520,11 +526,12 @@ function AppContent() {
 function PageIntro({ eyebrow, title, text }: { eyebrow: string; title: string; text: string }) {
   return <div><p className="text-xs font-bold uppercase tracking-[.15em] text-[#65806a]">{eyebrow}</p><h1 className="mt-2 font-display text-3xl font-extrabold tracking-[-.03em] sm:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-[#718077]">{text}</p></div>;
 }
-function BrowsePage({ query, properties, profileTown, onRetry }: { query: ReturnType<typeof useListProperties>; properties: Property[]; profileTown: string; onRetry: () => void }) {
+function BrowsePage({ query, properties, profileTown, onRetry }: { query: UseQueryResult<ListProperties200>; properties: Property[]; profileTown: string; onRetry: () => void }) {
   const [search, setSearch] = useState('');
   const [intent, setIntent] = useState(() => new URLSearchParams(window.location.search).get('intent') || 'all');
   const visible = properties.filter(p => (!search || `${p.title} ${p.town} ${p.state} ${p.category}`.toLowerCase().includes(search.toLowerCase())) && (intent==='all'||p.intent===intent));
-  return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><PageIntro eyebrow="Find your next place" title="Homes worth a closer look" text={`Browse live property listings and start around ${profileTown}. Verified pins are clearly marked.`}/><Link href="/request-property" className="inline-flex shrink-0 items-center gap-2 text-sm font-bold text-[#28763d]">Can’t find it? Request a search <ArrowRight size={14}/></Link></div>
+  return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><PageIntro eyebrow="Find your next place" title="Homes worth a closer look" text={`Browse property listings and start around ${profileTown}. Verified pins are clearly marked.`}/><Link href="/request-property" className="inline-flex shrink-0 items-center gap-2 text-sm font-bold text-[#28763d]">Can’t find it? Request a search <ArrowRight size={14}/></Link></div>
+    {query.data?.dataSource === 'mock' && <Notice tone="amber">Live data offline — these clearly marked samples are not live listings. Verify availability and ownership before relying on any details.</Notice>}
     <div className="flex flex-col gap-3 rounded-2xl border border-[#e4eae3] bg-white p-3 sm:flex-row sm:items-center"><label className="flex flex-1 items-center gap-2 rounded-xl bg-[#f4f7f3] px-3"><Search size={17} className="text-[#718077]"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search by town, title or type" className="h-11 w-full bg-transparent text-sm outline-none" data-testid="input-search-property"/></label><div className="flex items-center gap-2 overflow-x-auto">{[['all','All homes'],['rent','Rent'],['lease','Lease'],['social','Shared'],['sale','Sale']].map(([val,label])=><button key={val} onClick={()=>setIntent(val)} className={`whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold ${intent===val?'bg-[#e8f5e9] text-[#26723a]':'text-[#758078] hover:bg-[#f4f7f3]'}`}>{label}</button>)}</div><span className="hidden items-center gap-1 text-xs text-[#7b887e] md:inline-flex"><SlidersHorizontal size={14}/>Location first</span></div>
     {query.isLoading ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : query.isError ? <ErrorState onRetry={onRetry}/> : visible.length ? <><p className="text-xs font-semibold text-[#77847a]">{visible.length} properties to explore</p><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{visible.map(p=><PropertyCard key={p.id} property={p}/>)}</div></> : <EmptyState icon={Search} title={properties.length?'No matching places':'No listings to show yet'} body={properties.length?'Try a different search or adjust the intent filter.':'Current listings will appear here once available.'} action={properties.length?<button className="text-sm font-bold text-[#16783a]" onClick={()=>{setSearch('');setIntent('all')}}>Clear search filters</button>:undefined}/>}</div>;
 }
