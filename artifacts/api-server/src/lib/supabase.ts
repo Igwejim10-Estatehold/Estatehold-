@@ -26,7 +26,12 @@ function requiredEnv(key: string): string {
 }
 
 export function getSupabaseUrl(): string {
-  const url = new URL(requiredEnv("SUPABASE_URL"));
+  let url: URL;
+  try {
+    url = new URL(requiredEnv("SUPABASE_URL"));
+  } catch {
+    throw new SupabaseRequestError(503, "INVALID_URL");
+  }
   const path = url.pathname
     .replace(/\/(?:rest\/v1|auth\/v1|storage\/v1)\/?$/i, "")
     .replace(/\/+$/, "");
@@ -73,11 +78,16 @@ async function requestJson<T>(
   if (options.body !== undefined) headers.set("Content-Type", "application/json");
   if (options.prefer) headers.set("Prefer", options.prefer);
 
-  const response = await fetch(url, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    });
+  } catch {
+    throw new SupabaseRequestError(503, "CONNECTION_FAILED");
+  }
 
   if (!response.ok) {
     let code: string | undefined;

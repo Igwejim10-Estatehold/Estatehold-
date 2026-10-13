@@ -19,6 +19,8 @@ export interface Profile {
   lga?: string;
   town?: string;
   villageOfOrigin?: string;
+  agencyName?: string;
+  agentBio?: string;
   verificationStatus?: ProfileVerificationStatus;
   nbaSealNumber?: string;
   bankName?: string;

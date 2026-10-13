@@ -64,6 +64,7 @@ export const GetDashboardResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
   "premisesRulesUrl": zod.string().optional(),
   "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
   "hotelHas24HourReception": zod.boolean(),
@@ -121,6 +122,7 @@ export const ListPropertiesResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
   "premisesRulesUrl": zod.string().optional(),
   "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
   "hotelHas24HourReception": zod.boolean(),
@@ -205,6 +207,7 @@ export const CreatePropertyResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
   "premisesRulesUrl": zod.string().optional(),
   "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
   "hotelHas24HourReception": zod.boolean(),
@@ -254,6 +257,7 @@ export const GetPropertyResponse = zod.object({
   "isManaged": zod.boolean().optional(),
   "isExclusive": zod.boolean(),
   "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
   "premisesRulesUrl": zod.string().optional(),
   "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
   "hotelHas24HourReception": zod.boolean(),
@@ -442,6 +446,8 @@ export const GetProfileResponse = zod.object({
   "lga": zod.string().optional(),
   "town": zod.string().optional(),
   "villageOfOrigin": zod.string().optional(),
+  "agencyName": zod.string().optional(),
+  "agentBio": zod.string().optional(),
   "verificationStatus": zod.enum(['unverified', 'pending', 'verified', 'rejected']).optional(),
   "nbaSealNumber": zod.string().optional(),
   "bankName": zod.string().optional(),
@@ -457,6 +463,14 @@ export const updateProfileBodyFullNameMax = 160;
 
 export const updateProfileBodyPhoneMax = 30;
 
+export const updateProfileBodyAgencyNameMax = 160;
+
+export const updateProfileBodyAgentBioMax = 2000;
+
+export const updateProfileBodyEvidenceUrlsItemMax = 400;
+
+export const updateProfileBodyEvidenceUrlsMax = 2;
+
 export const updateProfileBodyBankAccountLast4Max = 4;
 
 
@@ -470,6 +484,9 @@ export const UpdateProfileBody = zod.object({
   "lga": zod.string().optional(),
   "town": zod.string(),
   "villageOfOrigin": zod.string().optional(),
+  "agencyName": zod.string().max(updateProfileBodyAgencyNameMax).optional(),
+  "agentBio": zod.string().max(updateProfileBodyAgentBioMax).optional(),
+  "evidenceUrls": zod.array(zod.string().max(updateProfileBodyEvidenceUrlsItemMax)).max(updateProfileBodyEvidenceUrlsMax).optional(),
   "nbaSealNumber": zod.string().optional(),
   "bankName": zod.string().optional(),
   "bankAccountLast4": zod.string().max(updateProfileBodyBankAccountLast4Max).optional()
@@ -486,6 +503,8 @@ export const UpdateProfileResponse = zod.object({
   "lga": zod.string().optional(),
   "town": zod.string().optional(),
   "villageOfOrigin": zod.string().optional(),
+  "agencyName": zod.string().optional(),
+  "agentBio": zod.string().optional(),
   "verificationStatus": zod.enum(['unverified', 'pending', 'verified', 'rejected']).optional(),
   "nbaSealNumber": zod.string().optional(),
   "bankName": zod.string().optional(),
@@ -636,6 +655,9 @@ export const ListAdminKycQueueResponse = zod.object({
   "role": zod.enum(['landlord', 'agent', 'attorney']),
   "status": zod.enum(['pending', 'verified', 'rejected']),
   "nbaSealNumber": zod.string().optional(),
+  "agencyName": zod.string().optional(),
+  "agentBio": zod.string().optional(),
+  "evidenceUrls": zod.array(zod.string()).optional(),
   "createdAt": zod.coerce.date()
 }))
 })

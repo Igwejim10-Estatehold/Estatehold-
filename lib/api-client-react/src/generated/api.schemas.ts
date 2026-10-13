@@ -62,6 +62,15 @@ export const PropertyIntent = {
   social: 'social',
 } as const;
 
+export type PropertyListingModerationStatus = typeof PropertyListingModerationStatus[keyof typeof PropertyListingModerationStatus];
+
+
+export const PropertyListingModerationStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
 export type PropertyHotelVerificationStatus = typeof PropertyHotelVerificationStatus[keyof typeof PropertyHotelVerificationStatus];
 
 
@@ -98,6 +107,7 @@ export interface Property {
   isManaged?: boolean;
   isExclusive: boolean;
   isLocked: boolean;
+  listingModerationStatus: PropertyListingModerationStatus;
   premisesRulesUrl?: string;
   hotelVerificationStatus: PropertyHotelVerificationStatus;
   hotelHas24HourReception: boolean;
@@ -354,6 +364,8 @@ export interface Profile {
   lga?: string;
   town?: string;
   villageOfOrigin?: string;
+  agencyName?: string;
+  agentBio?: string;
   verificationStatus?: ProfileVerificationStatus;
   nbaSealNumber?: string;
   bankName?: string;
@@ -384,6 +396,15 @@ export interface ProfileInput {
   lga?: string;
   town: string;
   villageOfOrigin?: string;
+  /** @maxLength 160 */
+  agencyName?: string;
+  /** @maxLength 2000 */
+  agentBio?: string;
+  /**
+     * @maxItems 2
+     * @items.maxLength 400
+     */
+  evidenceUrls?: string[];
   nbaSealNumber?: string;
   bankName?: string;
   /** @maxLength 4 */
@@ -640,6 +661,9 @@ export type AdminKycQueueItemsItem = {
   role: AdminKycQueueItemsItemRole;
   status: AdminKycQueueItemsItemStatus;
   nbaSealNumber?: string;
+  agencyName?: string;
+  agentBio?: string;
+  evidenceUrls?: string[];
   createdAt: string;
 };
 

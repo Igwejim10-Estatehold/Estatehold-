@@ -8,7 +8,9 @@ import { setAuthTokenGetter } from '@workspace/api-client-react';
 import {
   getGetAdminDashboardQueryKey, getGetDashboardQueryKey, getGetProfileQueryKey, getGetPublicConfigQueryKey,
   getGetPropertyQueryKey, getHealthCheckQueryKey, getListComplaintsQueryKey, getListPropertiesQueryKey,
-  getListSocialHousingUnitsQueryKey, getListSpecialRequestsQueryKey, useCalculateFees, useCalculateInstallments,
+  getListAdminKycQueueQueryKey, getListAdminHotelVerificationQueueQueryKey, getListSocialHousingUnitsQueryKey,
+  getListSpecialRequestsQueryKey, useListAdminKycQueue, useListAdminHotelVerificationQueue, useReviewKyc,
+  useReviewHotelVerification, useCalculateFees, useCalculateInstallments,
   useCreateComplaint, useCreateProperty, useCreateSpecialRequest, useCreateTenancyAgreement, useGetAdminDashboard,
   useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
   useListComplaints, useListProperties, useListSocialHousingUnits, useListSpecialRequests, useReleaseEscrow,
@@ -25,6 +27,8 @@ import NotFound from '@/pages/not-found';
 
 const queryClient = new QueryClient();
 const routes = [
+  ['/hotels', 'Hotels & short-lets', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
+  ['/agent-dashboard', 'Agent dashboard', Activity],
   ['/browse', 'Explore homes', Search], ['/map', 'Map search', MapPin], ['/list-property', 'List a property', Plus],
   ['/request-property', 'Find a property', Compass], ['/requests', 'My requests', ListChecks],
   ['/social-housing', 'Shared ownership', HeartHandshake], ['/complaints/new', 'Report an issue', LifeBuoy],
@@ -33,6 +37,12 @@ const routes = [
   ['/poa/tenant', 'Tenant POA draft', FileCheck2], ['/recovery', 'Property recovery', Shield],
   ['/tenancy-agreement', 'Tenancy agreement', FileText], ['/admin', 'Operations desk', Activity],
 ] as const;
+type AdminWorkspaceData = {
+  agents: Array<{ id: string; fullName?: string; email?: string; phone?: string; town?: string; agencyName?: string; verificationStatus?: string }>;
+  users: Array<{ id: string; fullName?: string; email?: string; role?: string; verificationStatus?: string }>;
+  properties: Array<{ id: string; title?: string; category?: string; state?: string; town?: string; moderationStatus?: string; isActive?: boolean }>;
+  payments: Array<{ id: string; status?: string; amountNaira?: number; agentFeeNaira?: number; platformFeeNaira?: number; createdAt?: string }>;
+};
 const money = (value?: number) => typeof value === 'number' && Number.isFinite(value) ? `₦${new Intl.NumberFormat('en-NG').format(value)}` : '—';
 const timeGreeting = () => {
   const hour = new Date().getHours();
@@ -62,7 +72,12 @@ function Button({ children, onClick, type = 'button', variant = 'primary', disab
   return <button data-testid={testId} type={type} onClick={onClick} disabled={disabled} className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-transform duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:translate-y-0 ${cls}`}>{children}</button>;
 }
 function LoadingCard() { return <div className="animate-pulse rounded-2xl border border-[#e5ebe4] bg-white p-5"><div className="h-4 w-1/3 rounded bg-[#edf2ed]"/><div className="mt-4 h-6 w-2/3 rounded bg-[#edf2ed]"/><div className="mt-5 h-32 rounded-xl bg-[#edf2ed]"/></div>; }
-function ErrorState({ onRetry }: { onRetry: () => void }) { return <div className="rounded-2xl border border-[#f0d2cf] bg-[#fff8f6] p-6 text-[#853b32]"><div className="flex items-center gap-2 font-bold"><CircleAlert size={18}/> We couldn’t load this right now.</div><p className="mt-1 text-sm text-[#855c56]">Check your connection and try again.</p><button onClick={onRetry} className="mt-4 text-sm font-bold underline">Try again</button></div>; }
+function ErrorState({ onRetry, error }: { onRetry: () => void; error?: unknown }) {
+  const detail = error instanceof Error && error.message && error.message !== 'Error'
+    ? error.message.slice(0, 280)
+    : 'Check your connection and try again.';
+  return <div className="rounded-2xl border border-[#f0d2cf] bg-[#fff8f6] p-6 text-[#853b32]"><div className="flex items-center gap-2 font-bold"><CircleAlert size={18}/> We couldn’t load this right now.</div><p className="mt-1 text-sm text-[#855c56]">{detail}</p><button onClick={onRetry} className="mt-4 text-sm font-bold underline">Try again</button></div>;
+}
 function EmptyState({ icon: Icon = Home, title, body, action }: { icon?: typeof Home; title: string; body: string; action?: ReactNode }) {
   return <div className="rounded-2xl border border-dashed border-[#cbd8cb] bg-[#fbfcf9] px-6 py-12 text-center"><div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#e8f5e9] text-[#16843d]"><Icon size={22}/></div><h3 className="mt-4 font-display text-xl font-extrabold">{title}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#6a786e]">{body}</p>{action && <div className="mt-5">{action}</div>}</div>;
 }
@@ -92,17 +107,40 @@ function AppContent() {
   const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string } } | null>(() => {
     try { const raw = localStorage.getItem('estatehold-session'); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
+  const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspaceData | null>(null);
+  const [adminWorkspaceError, setAdminWorkspaceError] = useState('');
+  const [adminWorkspaceLoading, setAdminWorkspaceLoading] = useState(false);
+  const [adminWorkspaceTab, setAdminWorkspaceTab] = useState('Pending Agents');
+  const [adminWorkspaceReload, setAdminWorkspaceReload] = useState(0);
   const queryClient = useQueryClient();
   const config = useGetPublicConfig({ query: { queryKey: getGetPublicConfigQueryKey() } });
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey() } });
-  const dashboard = useGetDashboard({ query: { enabled: location === '/', queryKey: getGetDashboardQueryKey() } });
-  const profile = useGetProfile({ query: { enabled: !!authSession || location === '/profile', queryKey: getGetProfileQueryKey() } });
+  const dashboard = useGetDashboard({ query: { enabled: location === '/', queryKey: getGetDashboardQueryKey(), retry: false } });
+  const profile = useGetProfile({ query: { enabled: !!authSession || ['/profile','/admin','/agent-dashboard'].includes(location), queryKey: getGetProfileQueryKey(), retry: false } });
+  useEffect(() => {
+    if (location !== '/admin' || !authSession) return;
+    let active = true;
+    setAdminWorkspaceLoading(true);
+    fetch('/api/admin/workspace-data', { headers: { Authorization: `Bearer ${authSession.access_token}` } })
+      .then(async response => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.message || 'Admin data could not be loaded.');
+        return payload as AdminWorkspaceData;
+      })
+      .then(data => { if (active) { setAdminWorkspace(data); setAdminWorkspaceError(''); } })
+      .catch(error => { if (active) setAdminWorkspaceError(error instanceof Error ? error.message : 'Admin data could not be loaded.'); })
+      .finally(() => { if (active) setAdminWorkspaceLoading(false); });
+    return () => { active = false; };
+  }, [location, authSession?.access_token, adminWorkspaceReload]);
   const propertyFilters = useMemo(() => ({ town: profile.data?.town || undefined }), [profile.data?.town]);
-  const propertiesQuery = useListProperties(propertyFilters, { query: { enabled: ['/','/browse','/map','/tenancy-agreement'].includes(location), queryKey: getListPropertiesQueryKey(propertyFilters) } });
+  const propertiesQuery = useListProperties(propertyFilters, { query: { enabled: ['/','/browse','/map','/tenancy-agreement'].includes(location), queryKey: getListPropertiesQueryKey(propertyFilters), retry: false } });
+  const hotelsQuery = useListProperties({}, { query: { enabled: location === '/hotels', queryKey: getListPropertiesQueryKey({}), retry: false } });
   const socialQuery = useListSocialHousingUnits({ query: { enabled: location === '/social-housing', queryKey: getListSocialHousingUnitsQueryKey() } });
   const requestsQuery = useListSpecialRequests({ query: { enabled: ['/requests','/admin'].includes(location), queryKey: getListSpecialRequestsQueryKey() } });
   const complaintsQuery = useListComplaints({ query: { enabled: ['/admin'].includes(location), queryKey: getListComplaintsQueryKey() } });
   const adminQuery = useGetAdminDashboard({ query: { enabled: location === '/admin', queryKey: getGetAdminDashboardQueryKey() } });
+  const kycQueue = useListAdminKycQueue({ query: { enabled: location === '/admin', queryKey: getListAdminKycQueueQueryKey() } });
+  const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
   const singleProperty = useGetProperty(propertyRouteParams?.id || '', { query: { enabled: !!propertyRoute && !!propertyRouteParams?.id, queryKey: getGetPropertyQueryKey(propertyRouteParams?.id || '') } });
   const createProperty = useCreateProperty();
   const createRequest = useCreateSpecialRequest();
@@ -114,11 +152,16 @@ function AppContent() {
   const createAgreement = useCreateTenancyAgreement();
   const delisting = useRequestPropertyDelisting();
   const releaseEscrow = useReleaseEscrow();
+  const reviewKyc = useReviewKyc();
+  const reviewHotel = useReviewHotelVerification();
   const [feeQuote, setFeeQuote] = useState<FeeQuote | null>(null);
   const [installmentQuote, setInstallmentQuote] = useState<InstallmentQuote | null>(null);
   const [paymentResult, setPaymentResult] = useState<{ reference: string; authorizationUrl: string; mode: string } | null>(null);
   const [createdAgreement, setCreatedAgreement] = useState<{ id: string; reviewNotice: string } | null>(null);
   const [authError, setAuthError] = useState('');
+  const [agentFormError, setAgentFormError] = useState('');
+  const [agentSubmitting, setAgentSubmitting] = useState(false);
+  const [checkInConsents, setCheckInConsents] = useState<Record<string, boolean>>({});
 
   useEffect(() => { setAuthTokenGetter(() => authSession?.access_token || null); return () => setAuthTokenGetter(null); }, [authSession]);
   useEffect(() => {
@@ -162,8 +205,14 @@ function AppContent() {
       priceNaira: Number(fd.get('priceNaira')), priceUnit: String(fd.get('priceUnit') || '') || undefined, intent: String(fd.get('intent')) as Property['intent'],
       bedrooms: Number(fd.get('bedrooms')) || undefined, bathrooms: Number(fd.get('bathrooms')) || undefined, sizeSqm: Number(fd.get('sizeSqm')) || undefined,
       latitude: Number(fd.get('latitude')) || 0, longitude: Number(fd.get('longitude')) || 0, imageUrl: String(fd.get('imageUrl') || '') || undefined, premisesRulesUrl: String(fd.get('premisesRulesUrl') || '') || undefined,
+      hotelCacNumber: String(fd.get('hotelCacNumber') || '') || undefined,
+      emergencyContactPhone: String(fd.get('emergencyContactPhone') || '') || undefined,
+      hotelHas24HourReception: Boolean(fd.get('hotelHas24HourReception')),
+      hotelCctvCommonAreas: Boolean(fd.get('hotelCctvCommonAreas')),
+      hotelCctvDisclosed: Boolean(fd.get('hotelCctvDisclosed')),
+      hotelSafetyCheckinAvailable: Boolean(fd.get('hotelSafetyCheckinAvailable')),
     };
-    createProperty.mutate({ data: input }, { onSuccess: result => { refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getGetDashboardQueryKey()); statusMessage('Listing submitted. Its location pin will remain marked pending until verified.'); navigate(`/property/${result.id}`); } });
+    createProperty.mutate({ data: input }, { onSuccess: result => { refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getListPropertiesQueryKey({})); refresh(getGetDashboardQueryKey()); statusMessage(result.hotelVerificationStatus === 'pending' ? 'Hotel submission received. It will appear in the verified directory only after admin review.' : 'Listing submitted for review.'); navigate(result.category === 'hotel' || result.category === 'short_let' ? '/hotels' : `/property/${result.id}`); } });
   };
   const submitRequest = (fd: FormData) => {
     const input: SpecialRequestInput = {
@@ -179,8 +228,76 @@ function AppContent() {
       country: 'Nigeria', state: String(fd.get('state')), lga: String(fd.get('lga') || ''), town: String(fd.get('town')),
       villageOfOrigin: String(fd.get('villageOfOrigin') || '') || undefined, nbaSealNumber: String(fd.get('nbaSealNumber') || '') || undefined,
       bankName: String(fd.get('bankName') || '') || undefined, bankAccountLast4: String(fd.get('bankAccountLast4') || '') || undefined,
+      agencyName: String(fd.get('agencyName') || '') || undefined, agentBio: String(fd.get('agentBio') || '') || undefined,
     };
     updateProfile.mutate({ data: input }, { onSuccess: () => { refresh(getGetProfileQueryKey()); statusMessage('Your profile details have been saved.'); } });
+  };
+  const submitAgentApplication = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault(); setAgentFormError('');
+    if (!authSession || !profile.data || !config.data?.supabaseUrl || !config.data.supabaseAnonKey) {
+      setAgentFormError('Sign in and finish loading your account before submitting an agent application.'); return;
+    }
+    const fd = new FormData(event.currentTarget);
+    const files = [fd.get('cacDocument'), fd.get('idDocument')];
+    if (!files.every((file) => file instanceof File && file.size > 0 && file.size <= 10 * 1024 * 1024 && ['image/jpeg','image/png','application/pdf'].includes(file.type))) {
+      setAgentFormError('Upload both CAC and ID documents as PDF, JPG or PNG files under 10 MB each.'); return;
+    }
+    setAgentSubmitting(true);
+    try {
+      const evidenceUrls: string[] = [];
+      for (const candidate of files) {
+        const file = candidate as File;
+        const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 80);
+        const objectPath = `${profile.data.id}/${crypto.randomUUID()}-${safeName}`;
+        const objectUrl = `${config.data.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/estatehold-kyc/${objectPath.split('/').map(encodeURIComponent).join('/')}`;
+        const uploaded = await fetch(objectUrl, {
+          method: 'POST',
+          headers: { apikey: config.data.supabaseAnonKey, Authorization: `Bearer ${authSession.access_token}`, 'Content-Type': file.type, 'x-upsert': 'false' },
+          body: file,
+        });
+        if (!uploaded.ok) throw new Error('One of the private KYC document uploads failed. Please retry.');
+        evidenceUrls.push(objectPath);
+      }
+      const input: ProfileInput = {
+        role: 'agent', fullName: String(fd.get('fullName') || ''), phone: String(fd.get('phone') || ''),
+        country: 'Nigeria', state: String(fd.get('state') || ''), town: String(fd.get('town') || ''),
+        agencyName: String(fd.get('agencyName') || ''), agentBio: String(fd.get('agentBio') || ''),
+        evidenceUrls,
+      };
+      updateProfile.mutate({ data: input }, {
+        onSuccess: () => { setAgentSubmitting(false); refresh(getGetProfileQueryKey()); statusMessage('Application submitted. Awaiting admin approval.'); navigate('/agent-dashboard'); },
+        onError: () => { setAgentSubmitting(false); setAgentFormError('Your application could not be saved. Check the Supabase migration and retry.'); },
+      });
+    } catch (error) {
+      setAgentSubmitting(false);
+      setAgentFormError(error instanceof Error ? error.message : 'The application could not be submitted.');
+    }
+  };
+  const openKycDocument = async (objectPath: string) => {
+    if (!authSession || !config.data?.supabaseUrl || !config.data.supabaseAnonKey) return;
+    try {
+      const url = `${config.data.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/estatehold-kyc/${objectPath.split('/').map(encodeURIComponent).join('/')}`;
+      const response = await fetch(url, { headers: { apikey: config.data.supabaseAnonKey, Authorization: `Bearer ${authSession.access_token}` } });
+      if (!response.ok) throw new Error('The KYC document could not be opened.');
+      const objectUrl = URL.createObjectURL(await response.blob());
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) { statusMessage(error instanceof Error ? error.message : 'Unable to open this document.'); }
+  };
+  const reviewAdminProperty = async (propertyId: string, decision: 'approved' | 'rejected') => {
+    if (!authSession) return;
+    try {
+      const response = await fetch(`/api/admin/properties/${encodeURIComponent(propertyId)}/review`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authSession.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || 'Property review did not complete.');
+      setAdminWorkspaceReload(v => v + 1);
+      refresh(getListPropertiesQueryKey({}));
+      statusMessage(decision === 'approved' ? 'Property approved.' : 'Property rejected.');
+    } catch (error) { statusMessage(error instanceof Error ? error.message : 'Property review did not complete.'); }
   };
   const content = () => {
     if (propertyRoute) {
@@ -229,6 +346,49 @@ function AppContent() {
           </section>
         </div>;
       }
+      case '/hotels': {
+        const verifiedHotels = (hotelsQuery.data?.items || []).filter(p =>
+          ['hotel','short_let'].includes(p.category) &&
+          p.hotelVerificationStatus === 'verified' &&
+          p.pinStatus === 'verified' &&
+          p.listingModerationStatus === 'approved'
+        );
+        return <div className="space-y-6">
+          <PageIntro eyebrow="Verified accommodation" title="Hotels & short-lets" text="Discover accommodation listings reviewed for both the property and its location."/>
+          <Notice>Guest privacy respected. No monitoring inside rooms. Safety check-in is voluntary and requires explicit consent. Hotel CCTV may be used only in disclosed common areas.</Notice>
+          {hotelsQuery.isLoading ? <LoadingCard/> : hotelsQuery.isError ? <ErrorState onRetry={() => hotelsQuery.refetch()} error={hotelsQuery.error}/> : verifiedHotels.length ? <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{verifiedHotels.map(p=><article key={p.id} className="overflow-hidden rounded-2xl border border-[#e4eae3] bg-white">
+            {p.imageUrl ? <img src={p.imageUrl} alt={p.title} className="h-48 w-full object-cover"/> : <div className="flex h-36 items-center justify-center bg-[#e8f5e9]"><Building2 size={38} className="text-[#7e9984]"/></div>}
+            <div className="p-5"><div className="flex flex-wrap gap-2"><span className="rounded-full bg-[#e8f5e9] px-2.5 py-1 text-[11px] font-bold text-[#26723a]">Hotel verified</span><span className="rounded-full bg-[#f2f5f0] px-2.5 py-1 text-[11px] font-bold capitalize text-[#627067]">{p.category === 'short_let' ? 'Short-let' : 'Hotel'}</span></div>
+              <h2 className="mt-3 font-display text-xl font-extrabold">{p.title}</h2><p className="mt-1 text-sm text-[#718077]">{p.town}, {p.state}</p><p className="mt-3 font-display text-lg font-extrabold">{money(p.priceNaira)} <span className="font-sans text-xs font-medium text-[#77847a]">{p.priceUnit || 'per night'}</span></p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs">{p.hotelHas24HourReception && <span className="rounded-lg bg-[#f1f7f1] px-2.5 py-1.5 text-[#345e3b]">24-hour reception</span>}{p.hotelCctvCommonAreas && p.hotelCctvDisclosed && <span className="rounded-lg bg-[#f1f7f1] px-2.5 py-1.5 text-[#345e3b]">Disclosed common-area CCTV only</span>}</div>
+              <p className="mt-3 text-sm leading-6 text-[#6a786e]">{p.description || 'Contact the property for accommodation details.'}</p>
+              <div className="mt-4 flex flex-wrap gap-2">{p.emergencyContactPhone && <a href={`tel:${p.emergencyContactPhone}`} className="inline-flex min-h-10 items-center rounded-xl border border-[#dfe7df] px-3 text-sm font-bold text-[#284a30]">Call reception / emergency contact</a>}
+              {p.hotelSafetyCheckinAvailable && p.emergencyContactPhone && <div className="mt-2 w-full rounded-xl bg-[#f7f9f5] p-3"><label className="flex items-start gap-2 text-xs leading-5 text-[#59695e]"><input type="checkbox" checked={Boolean(checkInConsents[p.id])} onChange={e=>setCheckInConsents(s=>({...s,[p.id]:e.target.checked}))} className="mt-1 accent-[#16A34A]"/>I consent to request an optional safety check-in via SMS. No location or room activity is shared by Estatehold.</label>{checkInConsents[p.id] && <a className="mt-3 inline-flex text-sm font-bold text-[#18783a]" href={`sms:${encodeURIComponent(p.emergencyContactPhone)}?body=${encodeURIComponent(`I consent to a voluntary safety check-in for my stay at ${p.title}.`)}`}>Open SMS to request check-in</a>}</div>}</div>
+            </div></article>)}</div> : <EmptyState icon={Building2} title="No verified stays yet" body="Only accommodation with approved hotel and location verification appears here. Owners can submit a hotel or short-let for review below."/>}
+          <section className="mx-auto max-w-3xl space-y-4"><PageIntro eyebrow="For hotel & short-let owners" title="Submit an accommodation listing" text="CAC and contact details are private to the verification team. Approval is required before a listing appears in the verified directory."/>
+            {!authSession ? <Notice tone="amber">Sign in with an owner or agent account to submit a listing. <Link href="/sign-in" className="font-bold underline">Sign in</Link></Notice> : <form onSubmit={submitWith(submitProperty)} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
+              <div className="grid gap-4 sm:grid-cols-2"><Field label="Accommodation name" name="title" required/><SelectField label="Type" name="category" options={[['hotel','Hotel'],['short_let','Short-let']]}/><Field label="CAC registration number" name="hotelCacNumber" required/><Field label="Public reception / emergency contact" name="emergencyContactPhone" type="tel" required placeholder="+234…"/><Field label="State" name="state" required/><Field label="City / town" name="town" required/><Field label="Street address" name="address" required/><Field label="Price (₦)" name="priceNaira" type="number" min={1} required/><Field label="Price unit" name="priceUnit" defaultValue="per night"/><Field label="Guest terms / house rules URL" name="premisesRulesUrl" type="url" required placeholder="https://…"/><Field label="Latitude" name="latitude" type="number" step={0.000001} required/><Field label="Longitude" name="longitude" type="number" step={0.000001} required/></div>
+              <div className="space-y-3 rounded-xl bg-[#f7f9f5] p-4 text-sm"><label className="flex gap-2"><input type="checkbox" name="hotelHas24HourReception" className="mt-1 accent-[#16A34A]"/>24-hour reception is available</label><label className="flex gap-2"><input type="checkbox" name="hotelCctvCommonAreas" className="mt-1 accent-[#16A34A]"/>CCTV is used in common areas</label><label className="flex gap-2"><input type="checkbox" name="hotelSafetyCheckinAvailable" className="mt-1 accent-[#16A34A]"/>Offer voluntary safety check-in by SMS</label><label className="flex gap-2 font-semibold"><input type="checkbox" name="hotelCctvDisclosed" required className="mt-1 accent-[#16A34A]"/>I confirm there is no monitoring inside guest rooms and any CCTV is disclosed and limited to common areas.</label></div>
+              <TextArea label="Accommodation details" name="description" placeholder="Share information guests need before booking."/>
+              {createProperty.isError && <Notice tone="red">Could not submit. Sign in with an owner/agent account and check the required listing details.</Notice>}
+              <Button type="submit" disabled={createProperty.isPending}>{createProperty.isPending ? 'Submitting…' : 'Submit for verification'}</Button>
+            </form>}
+          </section>
+        </div>;
+      }
+      case '/register-agent':
+        return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="Agent onboarding" title="Register as an agent" text="Submit your agency details for review. You can add properties after an administrator approves your application."/>
+          {profile.data?.role === 'agent' && profile.data.verificationStatus === 'pending' ? <Notice tone="amber">Awaiting Approval. Your documents are held in private storage for the verification team.</Notice> : !authSession ? <Notice tone="amber">Create an account or sign in before uploading documents. <Link href="/sign-up" className="font-bold underline">Create account</Link></Notice> :
+          <form onSubmit={submitAgentApplication} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8"><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" name="fullName" required defaultValue={profile.data?.fullName}/><Field label="Phone" name="phone" required defaultValue={profile.data?.phone}/><Field label="Email" name="email" type="email" readOnly defaultValue={profile.data?.email}/><Field label="City / town" name="town" required placeholder="Enugu, Port Harcourt, Lagos…"/><Field label="State" name="state" required/><Field label="Agency name" name="agencyName" required/><Field label="CAC certificate (PDF, JPG or PNG; max 10 MB)" name="cacDocument" type="file" required/><Field label="Government ID card (PDF, JPG or PNG; max 10 MB)" name="idDocument" type="file" required/></div><TextArea label="Agent bio" name="agentBio" placeholder="Describe your areas of practice and service."/>
+            <Notice>KYC documents are uploaded to private storage and visible only to you and authorised reviewers. Do not upload BVN or NIN here.</Notice>{agentFormError && <Notice tone="red">{agentFormError}</Notice>}
+            <Button type="submit" disabled={agentSubmitting || updateProfile.isPending}>{agentSubmitting || updateProfile.isPending ? 'Submitting securely…' : 'Submit agent application'}</Button>
+          </form>}</div>;
+      case '/agent-dashboard':
+        if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Agent workspace" title="Sign in to continue" text="Agent tools are available to approved Estatehold agents."/><Link className="font-bold text-[#18783a] underline" href="/sign-in">Sign in</Link></div>;
+        if (profile.isLoading) return <LoadingCard/>;
+        if (profile.data?.role !== 'agent') return <div className="space-y-4"><PageIntro eyebrow="Agent workspace" title="Agent access required" text="Submit an agent application before opening the agent dashboard."/><Link className="font-bold text-[#18783a] underline" href="/register-agent">Register as an agent</Link></div>;
+        if (profile.data.verificationStatus !== 'verified') return <div className="space-y-4"><PageIntro eyebrow="Agent workspace" title="Awaiting Approval" text="Property publishing unlocks after the verification team approves your CAC and ID documents."/><Link className="font-bold text-[#18783a] underline" href="/register-agent">Review your application</Link></div>;
+        return <div className="space-y-5"><PageIntro eyebrow="Agent workspace" title={`Welcome, ${profile.data.fullName}`} text="Your agent account is approved. Add a property listing or explore current listings."/><Notice>Your verified account can submit listings. Each property remains under moderation until reviewed.</Notice><Link href="/list-property" className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#0B0F0E] px-5 text-sm font-bold text-white"><Plus size={16}/>Add a property</Link></div>;
       case '/browse': {
         return <BrowsePage query={propertiesQuery} properties={filteredProperties} profileTown={profileTown} onRetry={() => propertiesQuery.refetch()}/>;
       }
@@ -281,9 +441,25 @@ function AppContent() {
       case '/tenancy-agreement':
         return <AgreementPage properties={propertiesQuery.data?.items || dashboard.data?.items || []} mutation={createAgreement} result={createdAgreement} onResult={setCreatedAgreement}/>;
       case '/admin':
+        if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
+        if (profile.isLoading) return <LoadingCard/>;
+        if (profile.data?.role !== 'admin') return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin access required" text="This review desk is restricted to approved Estatehold administrators."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link></div>;
         return <div className="space-y-6"><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow release remains disabled pending compliance approval, regardless of queue status.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
-          <div className="grid gap-5 lg:grid-cols-2"><section className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Complaint queue</h2>{complaintsQuery.isLoading ? <div className="mt-4"><LoadingCard/></div> : complaintsQuery.isError ? <div className="mt-4"><ErrorState onRetry={()=>complaintsQuery.refetch()}/></div> : complaintsQuery.data?.items.length ? <div className="mt-4 divide-y divide-[#edf1ec]">{complaintsQuery.data.items.map(c=><div key={c.id} className="py-3"><div className="flex justify-between"><b className="text-sm capitalize">{c.complaintType.replaceAll('_',' ')}</b><span className="text-xs capitalize text-[#66766a]">{c.status}</span></div><p className="mt-1 line-clamp-2 text-sm text-[#718077]">{c.description}</p></div>)}</div> : <p className="mt-4 text-sm text-[#718077]">No complaints in this view.</p>}</section>
+           <div className="rounded-3xl border border-[#e4eae3] bg-white p-4">
+             <div className="flex gap-2 overflow-x-auto">{['Pending Agents','All Agents','Properties','Users','Payments'].map(tab=><button key={tab} onClick={()=>{setAdminWorkspaceTab(tab);if(tab==='Pending Agents')document.getElementById('pending-agents-queue')?.scrollIntoView({behavior:'smooth'});}} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${adminWorkspaceTab===tab?'bg-[#0B0F0E] text-white':'bg-[#f3f6f1] text-[#516256]'}`}>{tab}</button>)}</div>
+             {adminWorkspaceTab!=='Pending Agents' && <div className="mt-4">
+               {adminWorkspaceLoading ? <LoadingCard/> : adminWorkspaceError ? <Notice tone="red">{adminWorkspaceError}</Notice> : !adminWorkspace ? <p className="text-sm text-[#718077]">Admin data is unavailable.</p> :
+                 adminWorkspaceTab==='All Agents' ? <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">Agent</th><th className="p-2">Agency</th><th className="p-2">City</th><th className="p-2">Status</th></tr></thead><tbody>{adminWorkspace.agents.map(a=><tr key={a.id} className="border-t border-[#edf1ec]"><td className="p-2">{a.fullName}<span className="block text-xs text-[#718077]">{a.email}</span></td><td className="p-2">{a.agencyName||'—'}</td><td className="p-2">{a.town||'—'}</td><td className="p-2 capitalize">{a.verificationStatus||'unverified'}</td></tr>)}</tbody></table></div> :
+                 adminWorkspaceTab==='Properties' ? <div className="divide-y divide-[#edf1ec]">{adminWorkspace.properties.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><b className="text-sm">{p.title||'Untitled property'}</b><p className="text-xs text-[#718077]">{p.category} · {p.town}, {p.state} · {p.moderationStatus}</p></div>{p.moderationStatus==='pending'&&<div className="flex gap-2"><Button onClick={()=>reviewAdminProperty(p.id,'approved')}>Approve</Button><Button variant="danger" onClick={()=>reviewAdminProperty(p.id,'rejected')}>Reject</Button></div>}</div>)}</div> :
+                 adminWorkspaceTab==='Users' ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">User</th><th className="p-2">Role</th><th className="p-2">Verification</th></tr></thead><tbody>{adminWorkspace.users.map(u=><tr key={u.id} className="border-t border-[#edf1ec]"><td className="p-2">{u.fullName||'—'}<span className="block text-xs text-[#718077]">{u.email}</span></td><td className="p-2 capitalize">{u.role}</td><td className="p-2 capitalize">{u.verificationStatus}</td></tr>)}</tbody></table></div> :
+                 <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">Payment</th><th className="p-2">Status</th><th className="p-2">Amount</th><th className="p-2">Agent commission</th><th className="p-2">Platform fee</th></tr></thead><tbody>{adminWorkspace.payments.map(p=><tr key={p.id} className="border-t border-[#edf1ec]"><td className="p-2 font-mono-ui text-xs">{p.id}</td><td className="p-2 capitalize">{p.status}</td><td className="p-2">{money(p.amountNaira)}</td><td className="p-2">{money(p.agentFeeNaira)}</td><td className="p-2">{money(p.platformFeeNaira)}</td></tr>)}</tbody></table></div>}
+             </div>}
+           </div>
+           <div className="grid gap-5 lg:grid-cols-2"><section id="pending-agents-queue" className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Pending agent applications</h2>{kycQueue.isLoading ? <div className="mt-4"><LoadingCard/></div> : kycQueue.isError ? <div className="mt-4"><ErrorState onRetry={()=>kycQueue.refetch()} error={kycQueue.error}/></div> : (kycQueue.data?.items || []).filter(a=>a.role==='agent').length ? <div className="mt-4 divide-y divide-[#edf1ec]">{(kycQueue.data?.items || []).filter(a=>a.role==='agent').map(a=><div key={a.profileId} className="py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm">{a.fullName}</b><p className="mt-1 text-xs text-[#718077]">{a.agencyName || 'Agency not listed'} · {a.email || 'No email'} · {a.status}</p><p className="mt-1 text-xs leading-5 text-[#718077]">{a.agentBio || 'No bio supplied.'}</p></div><div className="flex flex-wrap gap-2">{(a.evidenceUrls || []).map((path, index)=><Button key={path} variant="outline" onClick={()=>openKycDocument(path)}>{index===0?'View CAC':'View ID'}</Button>)}</div></div><div className="mt-3 flex gap-2"><Button onClick={()=>reviewKyc.mutate({profileId:a.profileId,data:{decision:'verified'}},{onSuccess:()=>{refresh(getListAdminKycQueueQueryKey());refresh(getGetAdminDashboardQueryKey());statusMessage('Agent approved.')}})} disabled={reviewKyc.isPending}>Approve</Button><Button variant="danger" onClick={()=>reviewKyc.mutate({profileId:a.profileId,data:{decision:'rejected'}},{onSuccess:()=>{refresh(getListAdminKycQueueQueryKey());statusMessage('Agent application rejected.')}})} disabled={reviewKyc.isPending}>Reject</Button></div></div>)}</div> : <p className="mt-4 text-sm text-[#718077]">No pending agent applications.</p>}</section>
+             <section className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Hotel & short-let verification</h2>{hotelQueue.isLoading ? <div className="mt-4"><LoadingCard/></div> : hotelQueue.isError ? <div className="mt-4"><ErrorState onRetry={()=>hotelQueue.refetch()} error={hotelQueue.error}/></div> : hotelQueue.data?.items.length ? <div className="mt-4 divide-y divide-[#edf1ec]">{hotelQueue.data.items.map(h=><div key={h.propertyId} className="py-4"><b className="text-sm">{h.title}</b><p className="mt-1 text-xs text-[#718077]">{h.category==='short_let'?'Short-let':'Hotel'} · {h.town}, {h.state} · CAC {h.cacNumber}</p><a href={`tel:${h.emergencyContactPhone}`} className="mt-1 inline-block text-xs font-bold text-[#18783a]">{h.emergencyContactPhone}</a><div className="mt-3 flex gap-2"><Button onClick={()=>reviewHotel.mutate({propertyId:h.propertyId,data:{decision:'verified'}},{onSuccess:()=>{refresh(getListAdminHotelVerificationQueueQueryKey());refresh(getListPropertiesQueryKey({}));statusMessage('Accommodation listing verified.')}})} disabled={reviewHotel.isPending}>Verify</Button><Button variant="danger" onClick={()=>reviewHotel.mutate({propertyId:h.propertyId,data:{decision:'rejected'}},{onSuccess:()=>refresh(getListAdminHotelVerificationQueueQueryKey())})} disabled={reviewHotel.isPending}>Reject</Button></div></div>)}</div> : <p className="mt-4 text-sm text-[#718077]">No accommodation reviews are waiting.</p>}</section>
+           </div>
+           <div className="grid gap-5 lg:grid-cols-2"><section className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Complaint queue</h2>{complaintsQuery.isLoading ? <div className="mt-4"><LoadingCard/></div> : complaintsQuery.isError ? <div className="mt-4"><ErrorState onRetry={()=>complaintsQuery.refetch()} error={complaintsQuery.error}/></div> : complaintsQuery.data?.items.length ? <div className="mt-4 divide-y divide-[#edf1ec]">{complaintsQuery.data.items.map(c=><div key={c.id} className="py-3"><div className="flex justify-between"><b className="text-sm capitalize">{c.complaintType.replaceAll('_',' ')}</b><span className="text-xs capitalize text-[#66766a]">{c.status}</span></div><p className="mt-1 line-clamp-2 text-sm text-[#718077]">{c.description}</p></div>)}</div> : <p className="mt-4 text-sm text-[#718077]">No complaints in this view.</p>}</section>
             <section className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Held escrow</h2><p className="mt-1 text-sm text-[#718077]">Release actions stay locked until compliance approval.</p><form className="mt-4 flex gap-2" onSubmit={e=>{e.preventDefault();const id=String(new FormData(e.currentTarget).get('transactionId'));releaseEscrow.mutate({transactionId:id},{onSuccess:()=>statusMessage('Escrow status updated.')});}}><input data-testid="input-escrow-id" name="transactionId" required placeholder="Transaction ID" className="min-w-0 flex-1 rounded-xl border border-[#dfe6df] px-3 py-2 text-sm"/><Button type="submit" variant="outline" disabled>Release disabled</Button></form><p className="mt-3 text-xs text-[#8c6c39]">Release control is disabled pending compliance approval.</p></section></div>
           {requestsQuery.data?.items.length ? <section className="rounded-3xl border border-[#e4eae3] bg-white p-5"><h2 className="font-display text-xl font-extrabold">Open property sourcing</h2>{requestsQuery.data.items.slice(0,4).map(r=><p key={r.id} className="mt-3 border-t border-[#edf1ec] pt-3 text-sm">{r.desiredTown}, {r.desiredState} · {r.status}</p>)}</section> : null}</div>;
       case '/sign-in':
@@ -303,24 +479,24 @@ function AppContent() {
   if (shellRoutes.includes(location)) return <main className="estate-shell relative"><div className="grain"/><div className="relative z-10 mx-auto max-w-6xl p-4 sm:p-8"><div className="mb-4 flex items-center justify-between"><Link href="/" className="flex items-center gap-2"><LogoMark small/><span className="font-display text-lg font-extrabold">estatehold</span></Link><Link href="/" className="text-sm font-semibold text-[#607066]">Back to marketplace</Link></div>{content()}</div><footer className="relative z-10 pb-6 text-center text-xs text-[#88948a]">Estatehold by Onyenic Civic Company Limited</footer></main>;
   return <div className="estate-shell relative"><div className="grain"/><div className="relative z-10 flex min-h-[100dvh]">
     <aside className="no-print sticky top-0 hidden h-[100dvh] w-[248px] shrink-0 flex-col overflow-y-auto bg-[#0B0F0E] px-4 py-5 text-[#eff4ee] lg:flex">
-      <Link href="/" className="flex items-center gap-3 px-2"><LogoMark/><span><b className="block font-display text-[17px] font-extrabold">estatehold</b><span className="block text-[10px] text-[#90a394]">Find home. Hold with confidence.</span></span></Link>
+      <Link href="/" className="flex items-center gap-3 px-2"><LogoMark/><span><b className="block font-display text-[17px] font-extrabold">estatehold</b><span className="block text-[9px] tracking-wide text-[#90a394]">TRUST SECURITY PROPERTY HOLDING</span></span></Link>
       <div className="mt-9 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-[#85978a]">Marketplace</div>
-      <nav className="mt-2 space-y-1">{[['/','Home',Home],['/browse','Explore',Search],['/map','Map search',MapPin],['/social-housing','Shared ownership',HeartHandshake],['/requests','My requests',ListChecks]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
+      <nav className="mt-2 space-y-1">{[['/','Home',Home],['/browse','Explore',Search],['/hotels','Hotels & short-lets',Building2],['/map','Map search',MapPin],['/social-housing','Shared ownership',HeartHandshake],['/requests','My requests',ListChecks]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
       <div className="mt-7 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-[#85978a]">Your tools</div>
-      <nav className="mt-2 space-y-1">{[['/request-property','Source a property',Compass],['/wallet','Wallet & fees',Wallet],['/installment-calculator','Installment planner',Calculator],['/profile','My profile',BadgeCheck],['/complaints/new','Report a concern',LifeBuoy],['/tenancy-agreement','Tenancy draft',FileText],['/poa/landlord','Landlord POA',FileText],['/poa/tenant','Tenant POA',FileCheck2],['/recovery','Recovery guide',Shield],['/admin','Operations desk',Activity]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
+      <nav className="mt-2 space-y-1">{[['/register-agent','Register as an agent',BadgeCheck],['/agent-dashboard','Agent dashboard',Activity],['/request-property','Source a property',Compass],['/wallet','Wallet & fees',Wallet],['/installment-calculator','Installment planner',Calculator],['/profile','My profile',BadgeCheck],['/complaints/new','Report a concern',LifeBuoy],['/tenancy-agreement','Tenancy draft',FileText],['/poa/landlord','Landlord POA',FileText],['/poa/tenant','Tenant POA',FileCheck2],['/recovery','Recovery guide',Shield],['/admin','Operations desk',Activity]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
       <div className="mt-auto rounded-2xl border border-white/10 bg-white/[.04] p-4"><div className="flex items-center gap-2 text-xs font-bold text-[#dce9dd]"><ShieldCheck size={15} className="text-[#7bd38c]"/>A little more certainty</div><p className="mt-2 text-xs leading-5 text-[#9aab9c]">Check the pin, read the terms, know your next step.</p><Link href="/recovery" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-[#8be19b]">Protection guide <ArrowRight size={13}/></Link></div>
     </aside>
     <div className="min-w-0 flex-1">
       <header className="no-print sticky top-0 z-30 border-b border-[#e4eae3] bg-[#f7f8f4]/90 backdrop-blur-xl"><div className="mx-auto flex h-[70px] max-w-[1440px] items-center justify-between px-4 sm:px-7">
         <div className="flex items-center gap-3 lg:hidden"><Link href="/" className="flex items-center gap-2"><LogoMark small/><span className="font-display font-extrabold">estatehold</span></Link></div>
         <div className="hidden items-center gap-2 text-xs font-medium text-[#718077] lg:flex"><MapPin size={14} className="text-[#16A34A]"/>Showing homes around <strong className="text-[#26372b]">{profileTown}</strong><ChevronDown size={14}/></div>
-        <div className="ml-auto flex items-center gap-2"><Link href="/list-property" className="hidden items-center gap-2 rounded-xl bg-[#0B0F0E] px-4 py-2.5 text-xs font-bold text-white sm:inline-flex"><Plus size={15}/>List a property</Link>{authSession ? <button onClick={logout} className="flex h-10 items-center gap-2 rounded-full border border-[#dfe6df] bg-white px-3 text-xs font-bold" data-testid="button-sign-out"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#e8f5e9] text-[#26723a]">{(authSession.user?.email||'E')[0].toUpperCase()}</span><span className="hidden sm:inline">Sign out</span></button> : <Link href="/sign-in" className="inline-flex items-center gap-2 rounded-xl border border-[#dfe6df] bg-white px-3 py-2.5 text-xs font-bold text-[#304039]"><LogIn size={14}/>Sign in</Link>}</div>
+        <div className="ml-auto flex items-center gap-2"><Link href="/hotels" className="hidden text-xs font-bold text-[#2e6840] md:inline-flex">Hotels</Link><Link href="/register-agent" className="hidden text-xs font-bold text-[#2e6840] md:inline-flex">Become an agent</Link><Link href="/list-property" className="hidden items-center gap-2 rounded-xl bg-[#0B0F0E] px-4 py-2.5 text-xs font-bold text-white sm:inline-flex"><Plus size={15}/>List a property</Link>{authSession ? <button onClick={logout} className="flex h-10 items-center gap-2 rounded-full border border-[#dfe6df] bg-white px-3 text-xs font-bold" data-testid="button-sign-out"><span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#e8f5e9] text-[#26723a]">{(authSession.user?.email||'E')[0].toUpperCase()}</span><span className="hidden sm:inline">Sign out</span></button> : <Link href="/sign-in" className="inline-flex items-center gap-2 rounded-xl border border-[#dfe6df] bg-white px-3 py-2.5 text-xs font-bold text-[#304039]"><LogIn size={14}/>Sign in</Link>}</div>
       </div></header>
       <main className="mx-auto max-w-[1440px] px-4 pb-28 pt-7 sm:px-7 sm:pt-9 lg:pb-12">
         <div className="mb-6 flex items-start justify-between gap-4"><div className="min-w-0">{location !== '/' && routeTitle && <p className="text-xs font-bold uppercase tracking-[.14em] text-[#67806b]">Estatehold <span className="px-1 text-[#a4b0a5]">/</span>{routeTitle}</p>}</div>{health.data && <span className="hidden items-center gap-1.5 rounded-full bg-[#e8f5e9] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#26723a] xl:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-[#16A34A]"/>{health.data.status}</span>}</div>
         {notice && <div className="mb-5"><Notice>{notice}</Notice></div>}
         <div className="page-enter">{content()}</div>
-        <footer className="mt-14 border-t border-[#e3e9e2] pt-5 text-xs text-[#89958b]">Estatehold by Onyenic Civic Company Limited <span className="mx-2">·</span> Documents are drafts pending Nigerian legal review</footer>
+         <footer className="mt-14 border-t border-[#e3e9e2] pt-5 text-xs text-[#89958b]">Estatehold by Onyenic Civic Company Limited · TRUST SECURITY PROPERTY HOLDING <span className="mx-2">·</span> Documents are drafts pending Nigerian legal review</footer>
       </main>
     </div>
     <nav className="no-print fixed inset-x-0 bottom-0 z-40 border-t border-[#dfe7df] bg-[#f9faf7]/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur-xl lg:hidden">
@@ -394,7 +570,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 function Router() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
+    <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
     <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>

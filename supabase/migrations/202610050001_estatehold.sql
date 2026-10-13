@@ -8,6 +8,8 @@ create table if not exists public.profiles (
   full_name text not null default '',
   email text not null default '',
   phone text not null default '',
+  agency_name text,
+  agent_bio text,
   nba_seal_number text,
   country text not null default 'Nigeria',
   state text not null default '',
@@ -54,6 +56,8 @@ create table if not exists public.properties (
   is_exclusive boolean not null default true,
   is_locked boolean not null default false,
   is_active boolean not null default true,
+  listing_moderation_status text not null default 'approved'
+    check (listing_moderation_status in ('pending', 'approved', 'rejected')),
   premises_rules_url text,
   hotel_cac_number text,
   emergency_contact_phone text,
@@ -128,6 +132,8 @@ create table if not exists public.kyc_submissions (
   profile_id uuid not null references public.profiles(id) on delete cascade,
   role text not null check (role in ('landlord', 'agent', 'attorney')),
   evidence_urls text[] not null default '{}',
+  agency_name text,
+  bio text,
   status text not null default 'pending' check (status in ('pending', 'verified', 'rejected')),
   reviewer_note text,
   created_at timestamptz not null default now(),
@@ -283,6 +289,29 @@ on storage.objects for insert to authenticated
 with check (
   bucket_id = 'estatehold-evidence'
   and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('estatehold-kyc', 'estatehold-kyc', false, 10485760, array['image/jpeg', 'image/png', 'application/pdf'])
+on conflict (id) do update set public = false, file_size_limit = 10485760;
+
+drop policy if exists "Applicants upload their own KYC documents" on storage.objects;
+create policy "Applicants upload their own KYC documents"
+on storage.objects for insert to authenticated
+with check (
+  bucket_id = 'estatehold-kyc'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists "Applicants and admins view KYC documents" on storage.objects;
+create policy "Applicants and admins view KYC documents"
+on storage.objects for select to authenticated
+using (
+  bucket_id = 'estatehold-kyc'
+  and (
+    (storage.foldername(name))[1] = auth.uid()::text
+    or exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
+  )
 );
 
 drop policy if exists "Users view their own complaint evidence" on storage.objects;

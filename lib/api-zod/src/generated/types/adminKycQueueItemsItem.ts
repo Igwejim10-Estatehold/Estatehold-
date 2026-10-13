@@ -15,5 +15,8 @@ export type AdminKycQueueItemsItem = {
   role: AdminKycQueueItemsItemRole;
   status: AdminKycQueueItemsItemStatus;
   nbaSealNumber?: string;
+  agencyName?: string;
+  agentBio?: string;
+  evidenceUrls?: string[];
   createdAt: Date;
 };

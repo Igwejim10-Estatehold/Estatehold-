@@ -21,6 +21,15 @@ export interface ProfileInput {
   lga?: string;
   town: string;
   villageOfOrigin?: string;
+  /** @maxLength 160 */
+  agencyName?: string;
+  /** @maxLength 2000 */
+  agentBio?: string;
+  /**
+     * @maxItems 2
+     * @items.maxLength 400
+     */
+  evidenceUrls?: string[];
   nbaSealNumber?: string;
   bankName?: string;
   /** @maxLength 4 */

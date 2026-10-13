@@ -9,6 +9,7 @@ import type { PinStatus } from './pinStatus';
 import type { PropertyCategory } from './propertyCategory';
 import type { PropertyHotelVerificationStatus } from './propertyHotelVerificationStatus';
 import type { PropertyIntent } from './propertyIntent';
+import type { PropertyListingModerationStatus } from './propertyListingModerationStatus';
 
 export interface Property {
   id: string;
@@ -36,6 +37,7 @@ export interface Property {
   isManaged?: boolean;
   isExclusive: boolean;
   isLocked: boolean;
+  listingModerationStatus: PropertyListingModerationStatus;
   premisesRulesUrl?: string;
   hotelVerificationStatus: PropertyHotelVerificationStatus;
   hotelHas24HourReception: boolean;

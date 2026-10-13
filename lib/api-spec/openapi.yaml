@@ -624,7 +624,7 @@ components:
       enum: [verified, pending, dispute, tenant_protected]
     Property:
       type: object
-      required: [id, title, category, state, town, priceNaira, intent, pinStatus, isExclusive, isLocked, hotelVerificationStatus, hotelHas24HourReception, hotelCctvCommonAreas, hotelCctvDisclosed, hotelSafetyCheckinAvailable]
+      required: [id, title, category, state, town, priceNaira, intent, pinStatus, isExclusive, isLocked, listingModerationStatus, hotelVerificationStatus, hotelHas24HourReception, hotelCctvCommonAreas, hotelCctvDisclosed, hotelSafetyCheckinAvailable]
       properties:
         id: { type: string }
         title: { type: string }
@@ -647,6 +647,7 @@ components:
         isManaged: { type: boolean }
         isExclusive: { type: boolean }
         isLocked: { type: boolean }
+        listingModerationStatus: { type: string, enum: [pending, approved, rejected] }
         premisesRulesUrl: { type: string }
         hotelVerificationStatus: { type: string, enum: [not_applicable, pending, verified, rejected] }
         hotelHas24HourReception: { type: boolean }
@@ -773,6 +774,8 @@ components:
         lga: { type: string }
         town: { type: string }
         villageOfOrigin: { type: string }
+        agencyName: { type: string }
+        agentBio: { type: string }
         verificationStatus: { type: string, enum: [unverified, pending, verified, rejected] }
         nbaSealNumber: { type: string }
         bankName: { type: string }
@@ -789,6 +792,12 @@ components:
         lga: { type: string }
         town: { type: string }
         villageOfOrigin: { type: string }
+        agencyName: { type: string, maxLength: 160 }
+        agentBio: { type: string, maxLength: 2000 }
+        evidenceUrls:
+          type: array
+          items: { type: string, maxLength: 400 }
+          maxItems: 2
         nbaSealNumber: { type: string }
         bankName: { type: string }
         bankAccountLast4: { type: string, maxLength: 4 }
@@ -959,6 +968,11 @@ components:
               role: { type: string, enum: [landlord, agent, attorney] }
               status: { type: string, enum: [pending, verified, rejected] }
               nbaSealNumber: { type: string }
+              agencyName: { type: string }
+              agentBio: { type: string }
+              evidenceUrls:
+                type: array
+                items: { type: string }
               createdAt: { type: string, format: date-time }
     AdminEscrowQueue:
       type: object

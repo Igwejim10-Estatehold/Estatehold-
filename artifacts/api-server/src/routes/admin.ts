@@ -86,7 +86,7 @@ router.get("/admin/queues/delistings", requireAuth, async (req, res): Promise<vo
 router.get("/admin/queues/kyc", requireAuth, async (req, res): Promise<void> => {
   if (!(await requireRoles(req, res, ["admin"]))) return;
   const query = new URLSearchParams({
-    select: "profile_id,role,status,created_at,profiles(full_name,email,nba_seal_number)",
+    select: "profile_id,role,status,created_at,evidence_urls,agency_name,bio,profiles(full_name,email,nba_seal_number,agency_name,agent_bio)",
     status: "eq.pending",
     order: "created_at.asc",
     limit: "250",
@@ -106,6 +106,21 @@ router.get("/admin/queues/kyc", requireAuth, async (req, res): Promise<void> => 
           typeof profile?.["nba_seal_number"] === "string"
             ? profile["nba_seal_number"]
             : undefined,
+        agencyName:
+          typeof row["agency_name"] === "string"
+            ? row["agency_name"]
+            : typeof profile?.["agency_name"] === "string"
+              ? profile["agency_name"]
+              : undefined,
+        agentBio:
+          typeof row["bio"] === "string"
+            ? row["bio"]
+            : typeof profile?.["agent_bio"] === "string"
+              ? profile["agent_bio"]
+              : undefined,
+        evidenceUrls: Array.isArray(row["evidence_urls"])
+          ? row["evidence_urls"].filter((item): item is string => typeof item === "string")
+          : [],
         createdAt: String(row["created_at"]),
       };
     });
@@ -364,5 +379,64 @@ router.post(
     });
   },
 );
+
+router.get("/admin/workspace-data", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const [agents, users, properties, payments] = await Promise.all([
+    supabaseRest<DbRow[]>("profiles?select=id,full_name,email,phone,town,agency_name,verification_status&role=eq.agent&limit=500"),
+    supabaseRest<DbRow[]>("profiles?select=id,full_name,email,role,verification_status&limit=500"),
+    supabaseRest<DbRow[]>("properties?select=id,title,category,state,town,listing_moderation_status,is_active&order=created_at.desc&limit=500"),
+    supabaseRest<DbRow[]>("transactions?select=id,status,amount_naira,agent_fee_naira,platform_fee_naira,created_at&order=created_at.desc&limit=500"),
+  ]);
+  res.json({
+    agents: agents.map((row) => ({
+      id: row["id"], fullName: row["full_name"], email: row["email"], phone: row["phone"],
+      town: row["town"], agencyName: row["agency_name"], verificationStatus: row["verification_status"],
+    })),
+    users: users.map((row) => ({
+      id: row["id"], fullName: row["full_name"], email: row["email"], role: row["role"],
+      verificationStatus: row["verification_status"],
+    })),
+    properties: properties.map((row) => ({
+      id: row["id"], title: row["title"], category: row["category"], state: row["state"],
+      town: row["town"], moderationStatus: row["listing_moderation_status"], isActive: row["is_active"],
+    })),
+    payments: payments.map((row) => ({
+      id: row["id"], status: row["status"], amountNaira: row["amount_naira"],
+      agentFeeNaira: row["agent_fee_naira"], platformFeeNaira: row["platform_fee_naira"],
+      createdAt: row["created_at"],
+    })),
+  });
+});
+
+router.post("/admin/properties/:propertyId/review", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const propertyId = typeof req.params.propertyId === "string" ? req.params.propertyId : "";
+  const decision = req.body?.decision;
+  if (!propertyId || !["approved", "rejected"].includes(decision)) {
+    res.status(400).json({ message: "Choose approved or rejected for this property." });
+    return;
+  }
+  const current = await supabaseRest<DbRow[]>(
+    `properties?id=eq.${encodeURIComponent(propertyId)}&select=id,listing_moderation_status&limit=1`,
+  );
+  if (!current.length) {
+    res.status(404).json({ message: "Property not found." });
+    return;
+  }
+  if (current[0]["listing_moderation_status"] !== "pending") {
+    res.status(409).json({ message: "This property has already been reviewed." });
+    return;
+  }
+  await supabaseRest(`properties?id=eq.${encodeURIComponent(propertyId)}`, {
+    method: "PATCH",
+    body: {
+      listing_moderation_status: decision,
+      is_active: decision === "approved",
+    },
+    prefer: "return=minimal",
+  });
+  res.json({ status: decision });
+});
 
 export default router;

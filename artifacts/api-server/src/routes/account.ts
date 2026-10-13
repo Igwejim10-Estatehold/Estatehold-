@@ -54,6 +54,17 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
     res.status(422).json({ message: "Enter your NBA seal number to request attorney verification." });
     return;
   }
+  if (input.role === "agent" && current?.["verification_status"] !== "verified") {
+    const documents = input.evidenceUrls ?? [];
+    if (!input.agencyName?.trim() || documents.length !== 2) {
+      res.status(422).json({ message: "Agent registration requires an agency name and both CAC and ID documents." });
+      return;
+    }
+    if (documents.some((path) => !path.startsWith(`${user.id}/`) || path.includes(".."))) {
+      res.status(400).json({ message: "Agent documents must be uploaded to your private account folder." });
+      return;
+    }
+  }
 
   const values = {
     id: user.id,
@@ -61,6 +72,8 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
     full_name: input.fullName.trim(),
     email: user.email ?? String(current?.["email"] ?? ""),
     phone: input.phone.trim(),
+    agency_name: input.agencyName?.trim() || current?.["agency_name"] || null,
+    agent_bio: input.agentBio?.trim() || current?.["agent_bio"] || null,
     nba_seal_number: input.nbaSealNumber?.trim() || null,
     country: input.country?.trim() || "Nigeria",
     state: input.state.trim(),
@@ -104,7 +117,23 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
     if (!pending.length) {
       await supabaseRest("kyc_submissions", {
         method: "POST",
-        body: { profile_id: user.id, role: input.role, evidence_urls: [] },
+        body: {
+          profile_id: user.id,
+          role: input.role,
+          evidence_urls: input.role === "agent" ? input.evidenceUrls ?? [] : [],
+          agency_name: input.role === "agent" ? input.agencyName?.trim() : null,
+          bio: input.role === "agent" ? input.agentBio?.trim() : null,
+        },
+        prefer: "return=minimal",
+      });
+    } else if (input.role === "agent") {
+      await supabaseRest(`kyc_submissions?id=eq.${encodeURIComponent(String(pending[0].id))}`, {
+        method: "PATCH",
+        body: {
+          evidence_urls: input.evidenceUrls ?? [],
+          agency_name: input.agencyName?.trim(),
+          bio: input.agentBio?.trim() || null,
+        },
         prefer: "return=minimal",
       });
     }

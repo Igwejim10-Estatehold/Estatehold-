@@ -104,6 +104,14 @@ router.post(
     const user = await requireUser(req, res);
     if (!user) return;
     const input = parsed.data;
+    const ownerProfile = await loadProfile(user.id);
+    if (
+      ownerProfile?.["role"] === "agent" &&
+      ownerProfile["verification_status"] !== "verified"
+    ) {
+      res.status(403).json({ message: "Agent listings are available after admin verification." });
+      return;
+    }
 
     if (input.category === "custom" && !input.customType?.trim()) {
       res.status(400).json({ message: "Add a name for the custom property category." });
@@ -151,6 +159,7 @@ router.post(
       is_exclusive: true,
       is_locked: false,
       is_active: true,
+      listing_moderation_status: "pending",
       premises_rules_url: input.premisesRulesUrl?.trim() || null,
       hotel_cac_number: isAccommodation ? input.hotelCacNumber?.trim() : null,
       emergency_contact_phone: isAccommodation ? input.emergencyContactPhone?.trim() : null,

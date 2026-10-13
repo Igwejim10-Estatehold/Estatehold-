@@ -49,6 +49,10 @@ export function mapProperty(row: DbProperty) {
     isManaged: Boolean(row["is_managed"]),
     isExclusive: row.is_exclusive,
     isLocked: row.is_locked,
+    listingModerationStatus:
+      typeof row["listing_moderation_status"] === "string"
+        ? row["listing_moderation_status"]
+        : "approved",
     premisesRulesUrl:
       typeof row["premises_rules_url"] === "string" ? row["premises_rules_url"] : undefined,
     hotelVerificationStatus:
@@ -106,6 +110,7 @@ export async function loadBrowseableProperties(): Promise<DbProperty[]> {
     select: "*",
     is_active: "eq.true",
     is_exclusive: "eq.true",
+    listing_moderation_status: "eq.approved",
     order: "created_at.desc",
     limit: "250",
   });
@@ -133,6 +138,8 @@ export function mapProfile(row: DbRow) {
     state: String(row["state"] ?? ""),
     lga: String(row["lga"] ?? ""),
     town: String(row["town"] ?? ""),
+    agencyName: typeof row["agency_name"] === "string" ? row["agency_name"] : undefined,
+    agentBio: typeof row["agent_bio"] === "string" ? row["agent_bio"] : undefined,
     villageOfOrigin: String(row["village_of_origin"] ?? ""),
     verificationStatus: String(row["verification_status"] ?? "unverified"),
     nbaSealNumber:

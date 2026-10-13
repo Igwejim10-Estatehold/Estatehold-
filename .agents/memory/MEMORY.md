@@ -1,0 +1,1 @@
+- [Estatehold privacy and safety](estatehold-trust-privacy.md) — Check-ins are opt-in; no room monitoring; CCTV only in disclosed common areas.
