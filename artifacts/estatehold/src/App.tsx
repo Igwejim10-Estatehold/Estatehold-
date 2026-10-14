@@ -31,8 +31,10 @@ import NotFound from '@/pages/not-found';
 import LandlordKycPage from '@/pages/LandlordKycPage';
 import EstateholdMap from '@/components/EstateholdMap';
 import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
+import AdminMockDashboard from '@/pages/AdminMockDashboard';
 
 const queryClient = new QueryClient();
+const ADMIN_MOCK_MODE = true;
 const routes = [
   ['/hotels', 'Hotels & short-lets', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
   ['/agent-dashboard', 'Agent dashboard', Activity],
@@ -135,7 +137,7 @@ function AppContent() {
   const payoutBanks = useGetPayoutBanks({ query: { enabled: location === '/profile' && !!authSession, queryKey: getGetPayoutBanksQueryKey(), staleTime: 5 * 60 * 1000, retry: false } });
   const payoutDestination = useGetPayoutDestination({ query: { enabled: location === '/profile' && !!authSession, queryKey: [...getGetPayoutDestinationQueryKey(), authSession?.user?.id], retry: false } });
   useEffect(() => {
-    if (location !== '/admin' || !authSession) return;
+    if (ADMIN_MOCK_MODE || location !== '/admin' || !authSession) return;
     let active = true;
     setAdminWorkspaceLoading(true);
     fetch('/api/admin/workspace-data', { headers: { Authorization: `Bearer ${authSession.access_token}` } })
@@ -154,13 +156,13 @@ function AppContent() {
   const hotelsQuery = useListProperties({}, { query: { enabled: location === '/hotels', queryKey: getListPropertiesQueryKey({}), retry: false } });
   const processingFeesQuery = useGetProcessingFeeSchedule({ query: { enabled: location === '/processing-fees', retry: false, queryKey: getGetProcessingFeeScheduleQueryKey() } });
   const socialQuery = useListSocialHousingUnits({ query: { enabled: location === '/social-housing', queryKey: getListSocialHousingUnitsQueryKey() } });
-  const requestsQuery = useListSpecialRequests({ query: { enabled: ['/requests','/admin'].includes(location), queryKey: getListSpecialRequestsQueryKey() } });
-  const complaintsQuery = useListComplaints({ query: { enabled: ['/admin'].includes(location), queryKey: getListComplaintsQueryKey() } });
-  const adminQuery = useGetAdminDashboard({ query: { enabled: location === '/admin', queryKey: getGetAdminDashboardQueryKey() } });
-  const kycQueue = useListAdminKycQueue({ query: { enabled: location === '/admin', queryKey: getListAdminKycQueueQueryKey() } });
-  const landlordKycQueue = useListAdminLandlordKycQueue({ query: { enabled: location === '/admin' && adminWorkspaceTab === 'Landlord KYC', queryKey: getListAdminLandlordKycQueueQueryKey(), retry: false } });
+  const requestsQuery = useListSpecialRequests({ query: { enabled: location === '/requests', queryKey: getListSpecialRequestsQueryKey() } });
+  const complaintsQuery = useListComplaints({ query: { enabled: false, queryKey: getListComplaintsQueryKey() } });
+  const adminQuery = useGetAdminDashboard({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin', queryKey: getGetAdminDashboardQueryKey() } });
+  const kycQueue = useListAdminKycQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin', queryKey: getListAdminKycQueueQueryKey() } });
+  const landlordKycQueue = useListAdminLandlordKycQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin' && adminWorkspaceTab === 'Landlord KYC', queryKey: getListAdminLandlordKycQueueQueryKey(), retry: false } });
   const reviewLandlordKyc = useReviewLandlordKyc();
-  const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
+  const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
   const singleProperty = useGetProperty(propertyRouteParams?.id || '', { query: { enabled: !!propertyRoute && !!propertyRouteParams?.id, queryKey: getGetPropertyQueryKey(propertyRouteParams?.id || '') } });
   const createProperty = useCreateProperty();
   const createRequest = useCreateSpecialRequest();
@@ -571,6 +573,7 @@ function AppContent() {
         if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
         if (profile.isLoading) return <LoadingCard/>;
         if (profile.data?.role !== 'admin') return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin access required" text="This review desk is restricted to approved Estatehold administrators."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link></div>;
+        if (ADMIN_MOCK_MODE) return <AdminMockDashboard/>;
         return <div className="space-y-6"><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
            <div className="rounded-3xl border border-[#e4eae3] bg-white p-4">
