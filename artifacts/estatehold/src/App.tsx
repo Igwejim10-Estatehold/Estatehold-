@@ -125,6 +125,23 @@ function AppContent() {
   const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string; id?: string } } | null>(() => {
     try { const raw = localStorage.getItem('estatehold-session'); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
+  const [mockOwnerPreview, setMockOwnerPreview] = useState(() => import.meta.env.DEV && localStorage.getItem('estatehold-mock-owner-preview') === 'enabled');
+  const mockOwnerPreviewAvailable = import.meta.env.DEV && ADMIN_MOCK_MODE;
+  const enableMockOwnerPreview = () => {
+    if (!mockOwnerPreviewAvailable) return;
+    localStorage.setItem('estatehold-mock-owner-preview', 'enabled');
+    setMockOwnerPreview(true);
+  };
+  const exitMockOwnerPreview = () => {
+    localStorage.removeItem('estatehold-mock-owner-preview');
+    setMockOwnerPreview(false);
+  };
+  const mockOwnerPreviewButton = mockOwnerPreviewAvailable && !mockOwnerPreview
+    ? <button onClick={enableMockOwnerPreview} className="rounded-lg border border-[#cbd9c7] px-4 py-2 text-sm font-bold text-[#285b34]">Open local mock preview</button>
+    : null;
+  const mockOwnerPreviewBanner = mockOwnerPreview
+    ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><span><b>Development mock-owner preview.</b> Static sample data only; this does not grant API or production access.</span><button onClick={exitMockOwnerPreview} className="font-bold underline">Exit preview</button></div>
+    : null;
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspaceData | null>(null);
   const [adminWorkspaceError, setAdminWorkspaceError] = useState('');
   const [adminWorkspaceLoading, setAdminWorkspaceLoading] = useState(false);
@@ -134,7 +151,7 @@ function AppContent() {
   const config = useGetPublicConfig({ query: { queryKey: getGetPublicConfigQueryKey() } });
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey() } });
   const dashboard = useGetDashboard({ query: { enabled: location === '/', queryKey: getGetDashboardQueryKey(), retry: false } });
-  const profile = useGetProfile({ query: { enabled: !!authSession || ['/profile','/admin','/agent-dashboard'].includes(location), queryKey: getGetProfileQueryKey(), retry: false } });
+  const profile = useGetProfile({ query: { enabled: !!authSession || (!mockOwnerPreview && ['/profile','/admin','/executive','/agent-dashboard'].includes(location)), queryKey: getGetProfileQueryKey(), retry: false } });
   const payoutBanks = useGetPayoutBanks({ query: { enabled: location === '/profile' && !!authSession, queryKey: getGetPayoutBanksQueryKey(), staleTime: 5 * 60 * 1000, retry: false } });
   const payoutDestination = useGetPayoutDestination({ query: { enabled: location === '/profile' && !!authSession, queryKey: [...getGetPayoutDestinationQueryKey(), authSession?.user?.id], retry: false } });
   useEffect(() => {
@@ -571,15 +588,15 @@ function AppContent() {
       case '/landlord-kyc':
         return <LandlordKycPage authSession={authSession} profile={profile.data} config={config.data}/>;
       case '/executive':
-        if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Sign-in required" text="Sign in with an Estatehold owner or executive account to continue."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
-        if (profile.isLoading) return <LoadingCard/>;
-        if (!['owner', 'executive'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Executive access required" text="This dashboard is restricted to Estatehold owners and executives."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link></div>;
-        return <ExecutiveDashboard/>;
+        if (!authSession && !mockOwnerPreview) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Sign-in required" text="Sign in with an Estatehold owner or executive account to continue."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link>{mockOwnerPreviewButton}</div>;
+        if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
+        if (!mockOwnerPreview && !['owner', 'executive'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Executive access required" text="This dashboard is restricted to Estatehold owners and executives."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link>{mockOwnerPreviewButton}</div>;
+        return <>{mockOwnerPreviewBanner}<ExecutiveDashboard/></>;
       case '/admin':
-        if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
-        if (profile.isLoading) return <LoadingCard/>;
-        if (profile.data?.role !== 'admin') return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin access required" text="This review desk is restricted to approved Estatehold administrators."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link></div>;
-        if (ADMIN_MOCK_MODE) return <AdminMockDashboard/>;
+        if (!authSession && !mockOwnerPreview) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link>{mockOwnerPreviewButton}</div>;
+        if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
+        if (!mockOwnerPreview && !['admin', 'owner'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin access required" text="This review desk is restricted to approved administrators and the account owner."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link>{mockOwnerPreviewButton}</div>;
+        if (ADMIN_MOCK_MODE) return <>{mockOwnerPreviewBanner}<AdminMockDashboard/></>;
         return <div className="space-y-6"><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
            <div className="rounded-3xl border border-[#e4eae3] bg-white p-4">
