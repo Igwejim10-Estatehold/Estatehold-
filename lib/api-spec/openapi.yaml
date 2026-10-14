@@ -1072,7 +1072,7 @@ components:
       required: [id, role, fullName, email]
       properties:
         id: { type: string }
-        role: { type: string, enum: [client, landlord, agent, attorney, represented_tenant, admin] }
+        role: { type: string, enum: [client, landlord, agent, attorney, represented_tenant, admin, owner, executive] }
         fullName: { type: string }
         email: { type: string, format: email }
         phone: { type: string }

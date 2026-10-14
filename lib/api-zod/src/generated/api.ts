@@ -544,7 +544,7 @@ export const CreateComplaintResponse = zod.object({
  */
 export const GetProfileResponse = zod.object({
   "id": zod.string(),
-  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin']),
+  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin', 'owner', 'executive']),
   "fullName": zod.string(),
   "email": zod.string().email(),
   "phone": zod.string().optional(),
@@ -595,7 +595,7 @@ export const UpdateProfileBody = zod.object({
 
 export const UpdateProfileResponse = zod.object({
   "id": zod.string(),
-  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin']),
+  "role": zod.enum(['client', 'landlord', 'agent', 'attorney', 'represented_tenant', 'admin', 'owner', 'executive']),
   "fullName": zod.string(),
   "email": zod.string().email(),
   "phone": zod.string().optional(),

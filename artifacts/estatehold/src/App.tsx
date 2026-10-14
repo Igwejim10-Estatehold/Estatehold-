@@ -32,6 +32,7 @@ import LandlordKycPage from '@/pages/LandlordKycPage';
 import EstateholdMap from '@/components/EstateholdMap';
 import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
 import AdminMockDashboard from '@/pages/AdminMockDashboard';
+import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
 
 const queryClient = new QueryClient();
 const ADMIN_MOCK_MODE = true;
@@ -569,6 +570,11 @@ function AppContent() {
         return <AgreementPage properties={propertiesQuery.data?.items || dashboard.data?.items || []} mutation={createAgreement} result={createdAgreement} onResult={setCreatedAgreement}/>;
       case '/landlord-kyc':
         return <LandlordKycPage authSession={authSession} profile={profile.data} config={config.data}/>;
+      case '/executive':
+        if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Sign-in required" text="Sign in with an Estatehold owner or executive account to continue."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
+        if (profile.isLoading) return <LoadingCard/>;
+        if (!['owner', 'executive'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Executive access required" text="This dashboard is restricted to Estatehold owners and executives."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link></div>;
+        return <ExecutiveDashboard/>;
       case '/admin':
         if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
         if (profile.isLoading) return <LoadingCard/>;
@@ -615,7 +621,7 @@ function AppContent() {
       <div className="mt-9 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-[#85978a]">Marketplace</div>
       <nav className="mt-2 space-y-1">{[['/','Home',Home],['/browse','Explore',Search],['/hotels','Hotels & short-lets',Building2],['/map','Map search',MapPin],['/social-housing','Shared ownership',HeartHandshake],['/requests','My requests',ListChecks]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
       <div className="mt-7 px-3 text-[10px] font-bold uppercase tracking-[.18em] text-[#85978a]">Your tools</div>
-      <nav className="mt-2 space-y-1">{[['/register-agent','Register as an agent',BadgeCheck],['/agent-dashboard','Agent dashboard',Activity],['/request-property','Source a property',Compass],['/wallet','Wallet & fees',Wallet],['/installment-calculator','Installment planner',Calculator],['/profile','My profile',BadgeCheck],['/complaints/new','Report a concern',LifeBuoy],['/tenancy-agreement','Tenancy draft',FileText],['/poa/landlord','Landlord POA',FileText],['/poa/tenant','Tenant POA',FileCheck2],['/recovery','Recovery guide',Shield],['/admin','Operations desk',Activity]].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
+      <nav className="mt-2 space-y-1">{[['/register-agent','Register as an agent',BadgeCheck],['/agent-dashboard','Agent dashboard',Activity],['/request-property','Source a property',Compass],['/wallet','Wallet & fees',Wallet],['/installment-calculator','Installment planner',Calculator],['/profile','My profile',BadgeCheck],['/complaints/new','Report a concern',LifeBuoy],['/tenancy-agreement','Tenancy draft',FileText],['/poa/landlord','Landlord POA',FileText],['/poa/tenant','Tenant POA',FileCheck2],['/recovery','Recovery guide',Shield],['/admin','Operations desk',Activity],...(String(profile.data?.role) === 'owner' || String(profile.data?.role) === 'executive' ? [['/executive','Executive dashboard',Activity]] : [])].map(([href,label,Icon])=>{const I=Icon as typeof Home;return <Link key={String(href)} href={String(href)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${location===href?'bg-[#1b2c20] text-[#8be19b]':'text-[#c3cec4] hover:bg-white/[.06]'}`}><I size={17}/>{String(label)}</Link>})}</nav>
       <div className="mt-auto rounded-2xl border border-white/10 bg-white/[.04] p-4"><div className="flex items-center gap-2 text-xs font-bold text-[#dce9dd]"><ShieldCheck size={15} className="text-[#7bd38c]"/>A little more certainty</div><p className="mt-2 text-xs leading-5 text-[#9aab9c]">Check the pin, read the terms, know your next step.</p><Link href="/recovery" className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-[#8be19b]">Protection guide <ArrowRight size={13}/></Link></div>
     </aside>
     <div className="min-w-0 flex-1">
@@ -799,7 +805,7 @@ function Router() {
     <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
-    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
+    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }
 function App() {
