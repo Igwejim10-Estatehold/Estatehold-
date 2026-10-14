@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import NotFound from '@/pages/not-found';
 import LandlordKycPage from '@/pages/LandlordKycPage';
+import EstateholdMap from '@/components/EstateholdMap';
 
 const queryClient = new QueryClient();
 const routes = [
@@ -178,14 +179,47 @@ function AppContent() {
   const [agentFormError, setAgentFormError] = useState('');
   const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [checkInConsents, setCheckInConsents] = useState<Record<string, boolean>>({});
+  const [googleMapsState, setGoogleMapsState] = useState<'missing'|'loading'|'ready'|'failed'>('missing');
+  const googleMapsKey = config.data?.googleMapsApiKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => { setAuthTokenGetter(() => authSession?.access_token || null); return () => setAuthTokenGetter(null); }, [authSession]);
   useEffect(() => {
-    if (config.data?.googleMapsApiKey && !document.getElementById('estatehold-maps')) {
-      const script = document.createElement('script'); script.id = 'estatehold-maps';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(config.data.googleMapsApiKey)}`; script.async = true; document.head.appendChild(script);
+    if (!googleMapsKey) { setGoogleMapsState('missing'); return; }
+    setGoogleMapsState('loading');
+    const googleWindow = window as typeof window & { google?: { maps?: unknown }; gm_authFailure?: () => void };
+    const previousAuthFailure = googleWindow.gm_authFailure;
+    let authenticationFailed = false;
+    googleWindow.gm_authFailure = () => {
+      authenticationFailed = true;
+      setGoogleMapsState('failed');
+      previousAuthFailure?.();
+    };
+    let script = document.getElementById('estatehold-maps') as HTMLScriptElement | null;
+    const handleLoad = () => window.setTimeout(() => {
+      setGoogleMapsState(!authenticationFailed && googleWindow.google?.maps ? 'ready' : 'failed');
+    }, 500);
+    const handleError = () => setGoogleMapsState('failed');
+    if (googleWindow.google?.maps) {
+      setGoogleMapsState('ready');
+    } else {
+      if (!script) {
+        script = document.createElement('script');
+        script.id = 'estatehold-maps';
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(googleMapsKey)}`;
+        script.async = true;
+      }
+      script.addEventListener('load', handleLoad);
+      script.addEventListener('error', handleError);
+      if (!script.isConnected) document.head.appendChild(script);
     }
-  }, [config.data?.googleMapsApiKey]);
+    const timeout = window.setTimeout(() => setGoogleMapsState(current => current === 'ready' ? current : 'failed'), 15000);
+    return () => {
+      window.clearTimeout(timeout);
+      script?.removeEventListener('load', handleLoad);
+      script?.removeEventListener('error', handleError);
+      googleWindow.gm_authFailure = previousAuthFailure;
+    };
+  }, [googleMapsKey]);
   useEffect(() => { setNotice(''); }, [location]);
   useEffect(() => {
     if (dashboard.data?.dataSource === 'mock' || propertiesQuery.data?.dataSource === 'mock') {
@@ -449,7 +483,7 @@ function AppContent() {
         return <BrowsePage query={propertiesQuery} properties={filteredProperties} profileTown={profileTown} onRetry={() => propertiesQuery.refetch()}/>;
       }
       case '/map':
-        return <MapSearchPage properties={filteredProperties} loading={propertiesQuery.isLoading} failed={propertiesQuery.isError} apiKey={config.data?.googleMapsApiKey} onRetry={() => propertiesQuery.refetch()}/>;
+        return <MapSearchPage properties={filteredProperties} loading={propertiesQuery.isLoading} failed={propertiesQuery.isError} apiKey={googleMapsKey} mapsState={googleMapsState} onRetry={() => propertiesQuery.refetch()}/>;
       case '/list-property':
         return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="For owners & agents" title="Add a property" text="Share accurate details. Location verification makes the listing clearer for everyone."/><Notice>Your pin location is part of the listing review. Use the property’s real coordinates; new pins show as pending until verified.</Notice>
           <form onSubmit={submitWith(submitProperty)} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
@@ -471,7 +505,7 @@ function AppContent() {
       case '/processing-fees':
         return <ProcessingFeesPage query={processingFeesQuery}/>;
       case '/offices':
-        return <OfficesPage/>;
+        return <OfficesPage apiKey={googleMapsKey} mapsState={googleMapsState}/>;
       case '/complaints/new':
         return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="Tenant protection" title="Lodge a complaint" text="Tell us what happened. Your submission will enter the appropriate review queue."/><Notice>Describe the issue clearly and include only evidence links you’re comfortable sharing. Estatehold does not replace emergency services or legal advice.</Notice>
           <form onSubmit={submitWith(fd=>{
@@ -592,7 +626,7 @@ function RequestsHub({ query }: { query: UseQueryResult<ListSpecialRequests200> 
     query.isLoading ? <div className="grid gap-3"><LoadingCard/><LoadingCard/></div> : query.isError ? <ErrorState onRetry={()=>query.refetch()}/> : (tab==='Request History'?history:current).length ? <div className="space-y-3">{(tab==='Request History'?history:current).map(r=><article key={r.id} className="rounded-2xl border border-[#e4eae3] bg-white p-5 sm:flex sm:items-center sm:justify-between"><div><div className="flex flex-wrap items-center gap-2"><span className="rounded-full bg-[#e8f5e9] px-3 py-1 text-xs font-bold capitalize text-[#26723a]">{r.status}</span><span className="text-xs text-[#748077]">{r.urgency==='urgent'?'Priority request':'Standard request'}</span></div><h2 className="mt-3 font-display text-lg font-extrabold">{r.desiredTown}, {r.desiredState}</h2><p className="mt-1 text-sm text-[#718077]">{r.neighborhood||r.desiredLga} · Budget up to {money(r.budgetNaira)}</p></div><span className="mt-3 text-xs text-[#78847b] sm:mt-0">{r.createdAt?new Date(r.createdAt).toLocaleDateString():'Date not provided'}</span></article>)}</div> : <EmptyState icon={ListChecks} title={tab==='Request History'?'No request history yet':'No current requests'} body="Requests you submit will appear here with their latest status."/>}
   </div>;
 }
-function MapSearchPage({ properties, loading, failed, apiKey, onRetry }: { properties: Property[]; loading: boolean; failed: boolean; apiKey?: string; onRetry:()=>void }) {
+function MapSearchPage({ properties, loading, failed, apiKey, mapsState, onRetry }: { properties: Property[]; loading: boolean; failed: boolean; apiKey?: string; mapsState:'missing'|'loading'|'ready'|'failed'; onRetry:()=>void }) {
   const [type,setType]=useState('all');
   const [service,setService]=useState('all');
   const types=[['all','All Types'],['home','Home'],['land','Land'],['warehouse','Warehouse'],['complex','Complex'],['shopping_mall','Mall'],['hotel','Hotel'],['school','School'],['hospital','Hospital'],['filling_station','Filling Station'],['worship_center','Worship Centers'],['factory','Factory'],['custom','Custom']];
@@ -601,8 +635,7 @@ function MapSearchPage({ properties, loading, failed, apiKey, onRetry }: { prope
     (service==='all'||p.intent===service||(service==='hotel_booking'&&p.category==='hotel')||(service==='managed'&&p.isManaged)));
   return <div className="space-y-5"><PageIntro eyebrow="Search by place" title="Explore the map" text="See what’s listed around the places that matter to you."/>
     <div className="grid gap-3 rounded-2xl border border-[#e4eae3] bg-white p-4 sm:grid-cols-2"><label className="block text-sm font-semibold text-[#304039]">Property type<select aria-label="Property type" value={type} onChange={event=>setType(event.target.value)} className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3">{types.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label className="block text-sm font-semibold text-[#304039]">Property service<select aria-label="Property service" value={service} onChange={event=>setService(event.target.value)} className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3">{services.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label></div>
-    {loading?<LoadingCard/>:failed?<ErrorState onRetry={onRetry}/>:!matches.length?<EmptyState icon={MapPin} title="No listings match these filters" body="Change the property type or service filters to explore other listings."/>:
-    <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]"><div className="relative min-h-[430px] overflow-hidden rounded-3xl border border-[#dce5dd] bg-[#e8eee5]">{apiKey&&matches.find(p=>typeof p.latitude==='number'&&typeof p.longitude==='number')?<iframe title="Google Maps property search" className="absolute inset-0 h-full w-full border-0" loading="lazy" src={`https://www.google.com/maps/embed/v1/view?key=${encodeURIComponent(apiKey)}&center=${matches.find(p=>typeof p.latitude==='number'&&typeof p.longitude==='number')!.latitude},${matches.find(p=>typeof p.latitude==='number'&&typeof p.longitude==='number')!.longitude}&zoom=12&maptype=roadmap`}/>:<div className="absolute inset-0 flex items-center justify-center bg-[#e8eee5] p-6 text-center text-sm font-semibold text-[#526a58]">{apiKey?'Listings in this selection do not have map coordinates yet.':'Google Maps key unavailable.'}</div>}</div><div className="space-y-3">{matches.slice(0,5).map(p=><PropertyCard key={p.id} property={p}/>)}</div></div>}
+     <div className="grid gap-4 lg:grid-cols-[1.15fr_.85fr]"><div className="min-h-[430px] overflow-hidden rounded-3xl border border-[#dce5dd] bg-[#e8eee5]"><EstateholdMap googleMapsKey={apiKey} googleMapsState={mapsState} className="min-h-[430px]"/></div><div className="space-y-3">{loading?<LoadingCard/>:failed?<ErrorState onRetry={onRetry}/>:matches.length?matches.slice(0,5).map(p=><PropertyCard key={p.id} property={p}/>):<EmptyState icon={MapPin} title="No listings match these filters" body="Change the property type or service filters to explore other listings."/>}</div></div>
   </div>;
 }
 function ProcessingFeesPage({ query }: { query: UseQueryResult<ProcessingFeeSchedule> }) {
@@ -613,9 +646,9 @@ function ProcessingFeesPage({ query }: { query: UseQueryResult<ProcessingFeeSche
     <section className="rounded-3xl border border-[#e4eae3] bg-white p-6 md:col-span-2"><h2 className="font-display text-xl font-extrabold">Hotel room bookings</h2><p className="mt-2 text-sm text-[#718077]">Hotel listing processing fee: {money(schedule?.hotelListingFeeNaira)}. Total commission: {Number(schedule?.hotelOwnerCommissionPercent||0)+Number(schedule?.guestCommissionPercent||0)}% of each room booking.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-[#f3f7f2] p-4"><b>{schedule?.hotelOwnerCommissionPercent}% deducted from owner payout</b></div><div className="rounded-xl bg-[#f3f7f2] p-4"><b>{schedule?.guestCommissionPercent}% charged to guest/customer</b></div></div></section></div>}
     <Notice tone="amber">The fee schedule is served by the backend. Paystack collection and settlement remain test-only until configured and verified.</Notice></div>;
 }
-function OfficesPage() {
+function OfficesPage({apiKey,mapsState}:{apiKey?:string;mapsState:'missing'|'loading'|'ready'|'failed'}) {
   return <div className="space-y-6"><PageIntro eyebrow="Local support" title="Estatehold Offices Near You" text="Find a corporate Estatehold office and its support hours."/>
-    <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]"><section className="relative min-h-[380px] overflow-hidden rounded-3xl border border-[#dce5dd] bg-[#e8eee5]"><iframe title="Interactive map of Nigeria" className="absolute inset-0 h-full w-full border-0" loading="lazy" src="https://maps.google.com/maps?q=Nigeria&output=embed"/></section><div className="rounded-3xl border border-[#e4eae3] bg-white p-6"><h2 className="font-display text-xl font-extrabold">Office locations</h2><p className="mt-3 text-sm leading-6 text-[#718077]">No confirmed corporate office address, phone number, or operating hours have been published yet.</p><p className="mt-4 rounded-xl bg-[#f5f7f4] p-4 text-xs text-[#718077]">The map shows Nigeria for orientation only; it does not mark an Estatehold office.</p></div></div>
+    <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]"><section className="min-h-[380px] overflow-hidden rounded-3xl border border-[#dce5dd] bg-[#e8eee5]"><EstateholdMap googleMapsKey={apiKey} googleMapsState={mapsState}/></section><div className="rounded-3xl border border-[#e4eae3] bg-white p-6"><h2 className="font-display text-xl font-extrabold">Office locations</h2><div className="mt-4 rounded-2xl bg-[#f4f8f3] p-4"><h3 className="font-bold">Estatehold HQ - Emene</h3><p className="mt-1 text-sm text-[#718077]">Emene, Enugu State</p><p className="mt-1 text-xs text-[#718077]">6.4776, 7.5458</p></div><p className="mt-4 text-sm leading-6 text-[#718077]">Office phone number and support hours have not been provided yet.</p></div></div>
   </div>;
 }
 function WalletPage({ quote, onQuote, calc, payment, paymentResult, setPayment, onConfirmEscrow, canConfirmEscrow }: { quote: FeeQuote|null; onQuote: (q:FeeQuote|null)=>void; calc: ReturnType<typeof useCalculateFees>; payment: ReturnType<typeof useInitializePayment>; paymentResult: {reference:string;authorizationUrl:string;mode:string}|null; setPayment:(v:{reference:string;authorizationUrl:string;mode:string}|null)=>void; onConfirmEscrow:(transactionId:string)=>Promise<void>; canConfirmEscrow:boolean }) {

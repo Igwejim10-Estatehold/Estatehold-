@@ -1,1 +1,2 @@
 - [Estatehold privacy and safety](estatehold-trust-privacy.md) — Check-ins are opt-in; no room monitoring; CCTV only in disclosed common areas.
+- [Estatehold office location](estatehold-offices.md) — User-confirmed HQ marker is Emene, Enugu; phone and support hours are not yet provided.
