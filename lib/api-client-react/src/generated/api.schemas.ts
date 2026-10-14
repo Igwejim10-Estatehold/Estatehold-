@@ -396,6 +396,31 @@ export interface ComplaintInput {
   evidenceUrls?: string[];
 }
 
+export type SetExecutiveRoleInputRole = typeof SetExecutiveRoleInputRole[keyof typeof SetExecutiveRoleInputRole];
+
+
+export const SetExecutiveRoleInputRole = {
+  executive: 'executive',
+} as const;
+
+export interface SetExecutiveRoleInput {
+  /** @maxLength 254 */
+  email: string;
+  role: SetExecutiveRoleInputRole;
+}
+
+export type SetExecutiveRoleResultRole = typeof SetExecutiveRoleResultRole[keyof typeof SetExecutiveRoleResultRole];
+
+
+export const SetExecutiveRoleResultRole = {
+  executive: 'executive',
+} as const;
+
+export interface SetExecutiveRoleResult {
+  profileId: string;
+  role: SetExecutiveRoleResultRole;
+}
+
 export type ProfileRole = typeof ProfileRole[keyof typeof ProfileRole];
 
 

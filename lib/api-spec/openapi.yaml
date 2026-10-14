@@ -623,6 +623,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Agreement"
+  /admin/set-role:
+    post:
+      operationId: assignExecutiveRole
+      tags: [admin]
+      summary: Assign executive access to an existing profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetExecutiveRoleInput"
+      responses:
+        "200":
+          description: Executive role assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetExecutiveRoleResult"
+        "403":
+          description: Only the account owner may assign executive access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/dashboard:
     get:
       operationId: getAdminDashboard
@@ -1067,6 +1093,19 @@ components:
           type: array
           items: { type: string }
           maxItems: 8
+    SetExecutiveRoleInput:
+      type: object
+      additionalProperties: false
+      required: [email, role]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        role: { type: string, enum: [executive] }
+    SetExecutiveRoleResult:
+      type: object
+      required: [profileId, role]
+      properties:
+        profileId: { type: string }
+        role: { type: string, enum: [executive] }
     Profile:
       type: object
       required: [id, role, fullName, email]

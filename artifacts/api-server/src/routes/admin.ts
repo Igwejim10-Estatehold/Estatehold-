@@ -19,12 +19,77 @@ import {
   ReviewPropertyDelistingParams,
   UpdateComplaintStatusBody,
   UpdateComplaintStatusParams,
+  AssignExecutiveRoleBody,
+  AssignExecutiveRoleResponse,
 } from "@workspace/api-zod";
 import { requireAuth, requireRoles, requireUser } from "../lib/auth";
 import { type DbRow } from "../lib/estatehold";
 import { supabaseRest, supabaseRpc } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+router.post("/admin/set-role", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["owner"]))) return;
+  const body = AssignExecutiveRoleBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ message: "Enter a valid account email and choose the executive role." });
+    return;
+  }
+
+  const email = body.data.email.trim().toLowerCase();
+  const query = new URLSearchParams({
+    select: "id,email,role",
+    email: `ilike.${email}`,
+    limit: "2",
+  });
+  const matches = await supabaseRest<DbRow[]>(`profiles?${query.toString()}`);
+  if (matches.length !== 1) {
+    res.status(matches.length ? 409 : 404).json({
+      message: matches.length
+        ? "More than one profile matches that email; no role was changed."
+        : "No Estatehold profile was found for that email.",
+    });
+    return;
+  }
+
+  const target = matches[0];
+  const previousRole = String(target["role"] ?? "client");
+  if (previousRole === "owner" || previousRole === "admin") {
+    res.status(409).json({ message: "Owner and administrator roles cannot be changed through executive assignment." });
+    return;
+  }
+
+  const profileId = String(target["id"] ?? "");
+  if (!profileId) {
+    res.status(409).json({ message: "The matching profile is missing an account ID; no role was changed." });
+    return;
+  }
+
+  const updated = await supabaseRest<DbRow[]>(
+    `profiles?id=eq.${encodeURIComponent(profileId)}&select=id,role`,
+    {
+      method: "PATCH",
+      body: { role: "executive" },
+      prefer: "return=representation",
+    },
+  );
+  if (updated.length !== 1) {
+    res.status(409).json({ message: "The account role was not changed. Refresh and try again." });
+    return;
+  }
+
+  req.log.info(
+    {
+      ownerId: req.authUser?.id,
+      targetProfileId: profileId,
+      previousRole,
+      assignedRole: "executive",
+      requestIp: req.ip,
+    },
+    "Executive access assigned by owner",
+  );
+  res.json(AssignExecutiveRoleResponse.parse({ profileId, role: "executive" }));
+});
 
 async function countRows(path: string): Promise<number> {
   const [table, filterString = ""] = path.split("?");

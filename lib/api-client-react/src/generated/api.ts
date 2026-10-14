@@ -66,6 +66,8 @@ import type {
   PropertyPhotoInput,
   PublicConfig,
   ReviewLandlordKycInput,
+  SetExecutiveRoleInput,
+  SetExecutiveRoleResult,
   SpecialRequest,
   SpecialRequestInput,
   StatusResult,
@@ -2568,6 +2570,94 @@ export const useCreateTenancyAgreement = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateTenancyAgreementMutationOptions(options));
+    }
+
+export const getAssignExecutiveRoleUrl = () => {
+
+
+
+
+  return `/api/admin/set-role`
+}
+
+/**
+ * @summary Assign executive access to an existing profile
+ */
+export const assignExecutiveRole = async (setExecutiveRoleInput: SetExecutiveRoleInput, options?: Parameters<typeof customFetch>[1]): Promise<SetExecutiveRoleResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<SetExecutiveRoleResult>(getAssignExecutiveRoleUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setExecutiveRoleInput)
+  }
+);}
+
+
+
+
+
+export const getAssignExecutiveRoleMutationKey = () => ['assignExecutiveRole'] as const;
+
+export const getAssignExecutiveRoleMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignExecutiveRole>>, TError,AssignExecutiveRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof assignExecutiveRole>>, TError,AssignExecutiveRoleMutationVariables, TContext> => {
+
+const mutationKey = getAssignExecutiveRoleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof assignExecutiveRole>>, AssignExecutiveRoleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  assignExecutiveRole(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AssignExecutiveRoleMutationResult = NonNullable<Awaited<ReturnType<typeof assignExecutiveRole>>>
+    export type AssignExecutiveRoleMutationBody = BodyType<SetExecutiveRoleInput>
+    export type AssignExecutiveRoleMutationError = ErrorType<Error>
+    export type AssignExecutiveRoleMutationVariables = {data: BodyType<SetExecutiveRoleInput>}
+
+    /**
+ * @summary Assign executive access to an existing profile
+ */
+export const useAssignExecutiveRole = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof assignExecutiveRole>>, TError,AssignExecutiveRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof assignExecutiveRole>>,
+        TError,
+        AssignExecutiveRoleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAssignExecutiveRoleMutationOptions(options));
     }
 
 export const getGetAdminDashboardUrl = () => {

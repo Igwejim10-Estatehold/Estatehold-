@@ -859,6 +859,24 @@ export const CreateTenancyAgreementResponse = zod.object({
 
 
 /**
+ * @summary Assign executive access to an existing profile
+ */
+export const assignExecutiveRoleBodyEmailMax = 254;
+
+
+
+export const AssignExecutiveRoleBody = zod.object({
+  "email": zod.string().email().max(assignExecutiveRoleBodyEmailMax),
+  "role": zod.enum(['executive'])
+})
+
+export const AssignExecutiveRoleResponse = zod.object({
+  "profileId": zod.string(),
+  "role": zod.enum(['executive'])
+})
+
+
+/**
  * @summary Admin operational overview
  */
 export const GetAdminDashboardResponse = zod.object({
