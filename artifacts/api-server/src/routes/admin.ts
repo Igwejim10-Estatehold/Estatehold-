@@ -54,14 +54,39 @@ router.post("/admin/set-role", requireAuth, async (req, res): Promise<void> => {
 
   const target = matches[0];
   const previousRole = String(target["role"] ?? "client");
-  if (previousRole === "owner" || previousRole === "admin") {
-    res.status(409).json({ message: "Owner and administrator roles cannot be changed through executive assignment." });
+  if (previousRole === "admin") {
+    res.status(409).json({ message: "Administrator roles cannot be changed through executive assignment." });
     return;
   }
 
   const profileId = String(target["id"] ?? "");
   if (!profileId) {
     res.status(409).json({ message: "The matching profile is missing an account ID; no role was changed." });
+    return;
+  }
+
+  // Owner already has access to both operations and executive dashboards.
+  // A request assigning executive to that same profile is an idempotent grant:
+  // preserve the single-valued owner role instead of accidentally downgrading it.
+  if (previousRole === "owner") {
+    const ownerId = req.authUser?.id;
+    if (!ownerId) {
+      res.status(401).json({ message: "Sign in to continue." });
+      return;
+    }
+    await supabaseRest<DbRow[]>(
+      "profile_roles?on_conflict=profile_id,role",
+      {
+        method: "POST",
+        body: { profile_id: profileId, role: "executive", assigned_by: ownerId },
+        prefer: "resolution=merge-duplicates,return=representation",
+      },
+    );
+    req.log.info(
+      { ownerId: req.authUser?.id, targetProfileId: profileId, previousRole, assignedRole: "executive", requestIp: req.ip },
+      "Executive role assigned to owner account without changing owner role",
+    );
+    res.json(AssignExecutiveRoleResponse.parse({ profileId, role: "executive" }));
     return;
   }
 

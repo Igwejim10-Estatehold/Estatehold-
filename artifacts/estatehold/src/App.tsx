@@ -125,11 +125,13 @@ function AppContent() {
   const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string; id?: string } } | null>(() => {
     try { const raw = localStorage.getItem('estatehold-session'); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
-  const [mockOwnerPreview, setMockOwnerPreview] = useState(() => import.meta.env.DEV && localStorage.getItem('estatehold-mock-owner-preview') === 'enabled');
+  const mockOwnerEmail = 'igwejim10@gmail.com';
+  const [mockOwnerPreviewEmail, setMockOwnerPreviewEmail] = useState('');
+  const [mockOwnerPreview, setMockOwnerPreview] = useState(() => import.meta.env.DEV && localStorage.getItem('estatehold-mock-owner-preview')?.toLowerCase() === mockOwnerEmail);
   const mockOwnerPreviewAvailable = import.meta.env.DEV && ADMIN_MOCK_MODE;
   const enableMockOwnerPreview = () => {
-    if (!mockOwnerPreviewAvailable) return;
-    localStorage.setItem('estatehold-mock-owner-preview', 'enabled');
+    if (!mockOwnerPreviewAvailable || mockOwnerPreviewEmail.trim().toLowerCase() !== mockOwnerEmail) return;
+    localStorage.setItem('estatehold-mock-owner-preview', mockOwnerEmail);
     setMockOwnerPreview(true);
   };
   const exitMockOwnerPreview = () => {
@@ -137,10 +139,10 @@ function AppContent() {
     setMockOwnerPreview(false);
   };
   const mockOwnerPreviewButton = mockOwnerPreviewAvailable && !mockOwnerPreview
-    ? <button onClick={enableMockOwnerPreview} className="rounded-lg border border-[#cbd9c7] px-4 py-2 text-sm font-bold text-[#285b34]">Open local mock preview</button>
+    ? <form onSubmit={event => { event.preventDefault(); enableMockOwnerPreview(); }} className="flex flex-wrap items-center gap-2"><input type="email" required value={mockOwnerPreviewEmail} onChange={event => setMockOwnerPreviewEmail(event.target.value)} placeholder="Owner email" aria-label="Owner email for local mock preview" className="rounded-lg border border-[#cbd9c7] px-3 py-2 text-sm"/><button className="rounded-lg border border-[#cbd9c7] px-4 py-2 text-sm font-bold text-[#285b34]">Open local mock preview</button></form>
     : null;
   const mockOwnerPreviewBanner = mockOwnerPreview
-    ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><span><b>Development mock-owner preview.</b> Static sample data only; this does not grant API or production access.</span><button onClick={exitMockOwnerPreview} className="font-bold underline">Exit preview</button></div>
+    ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><span><b>Development mock-owner preview for {mockOwnerEmail}.</b> Static sample data only; this does not grant API or production access.</span><button onClick={exitMockOwnerPreview} className="font-bold underline">Exit preview</button></div>
     : null;
   const [adminWorkspace, setAdminWorkspace] = useState<AdminWorkspaceData | null>(null);
   const [adminWorkspaceError, setAdminWorkspaceError] = useState('');
