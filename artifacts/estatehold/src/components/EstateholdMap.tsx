@@ -3,8 +3,8 @@ import { divIcon } from 'leaflet';
 import { MapContainer, Marker, Popup, TileLayer, Tooltip } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-export const NIGERIA_MAP_CENTER: [number, number] = [9.082, 8.6753];
 export const ESTATEHOLD_HQ: [number, number] = [6.4776, 7.5458];
+export const ESTATEHOLD_MAP_CENTER: [number, number] = [6.4776, 7.5458];
 
 const hqIcon = divIcon({
   className: 'estatehold-map-icon',
@@ -26,8 +26,8 @@ function GoogleMap({ className }: { className: string }) {
     const maps = (window as unknown as { google?: { maps?: MapsApi } }).google?.maps;
     if (!maps || !mapElement.current) return;
     const map = new maps.Map(mapElement.current, {
-      center: { lat: NIGERIA_MAP_CENTER[0], lng: NIGERIA_MAP_CENTER[1] },
-      zoom: 6,
+      center: { lat: ESTATEHOLD_MAP_CENTER[0], lng: ESTATEHOLD_MAP_CENTER[1] },
+      zoom: 11,
       mapTypeControl: false,
       streetViewControl: false,
     });
@@ -52,16 +52,12 @@ export default function EstateholdMap({
   className?: string;
 }) {
   const usingGoogle = Boolean(googleMapsKey) && googleMapsState === 'ready';
-  const fallbackText = !googleMapsKey || googleMapsState === 'missing'
-    ? 'Using OpenStreetMap - Google Maps key not configured'
-    : googleMapsState === 'loading'
-      ? 'Using OpenStreetMap while Google Maps loads'
-      : 'Using OpenStreetMap - Google Maps key is invalid or unavailable';
+  const fallbackText = 'Map by OpenStreetMap - No billing required';
 
   return <div className={`relative h-full min-h-[380px] w-full overflow-hidden rounded-[inherit] ${className}`}>
     {usingGoogle
       ? <GoogleMap className="absolute inset-0 h-full w-full"/>
-      : <MapContainer center={NIGERIA_MAP_CENTER} zoom={6} scrollWheelZoom={false} className="absolute inset-0 h-full w-full">
+      : <MapContainer center={ESTATEHOLD_MAP_CENTER} zoom={11} scrollWheelZoom={false} className="absolute inset-0 h-full w-full">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -180,7 +180,9 @@ function AppContent() {
   const [agentSubmitting, setAgentSubmitting] = useState(false);
   const [checkInConsents, setCheckInConsents] = useState<Record<string, boolean>>({});
   const [googleMapsState, setGoogleMapsState] = useState<'missing'|'loading'|'ready'|'failed'>('missing');
-  const googleMapsKey = config.data?.googleMapsApiKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+  // Use only an explicit Vite key for the optional Google provider. Ignore any
+  // legacy server-provided key so OpenStreetMap remains the default.
+  const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
   useEffect(() => { setAuthTokenGetter(() => authSession?.access_token || null); return () => setAuthTokenGetter(null); }, [authSession]);
   useEffect(() => {
