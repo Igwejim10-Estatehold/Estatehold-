@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { HealthCheckResponse } from "@workspace/api-zod";
-import { supabaseRest } from "../lib/supabase";
+import { SupabaseRequestError, supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
 
@@ -14,7 +14,18 @@ router.get("/health/supabase", async (_req, res): Promise<void> => {
   try {
     await supabaseRest<unknown>("properties?select=id&limit=1");
     res.json({ supabase: "connected", latency: Date.now() - startedAt });
-  } catch {
+  } catch (error) {
+    if (error instanceof SupabaseRequestError) {
+      _req.log.warn(
+        { status: error.status, code: error.code, latency: Date.now() - startedAt },
+        "Supabase health probe failed",
+      );
+    } else {
+      _req.log.warn(
+        { errorName: error instanceof Error ? error.name : "UnknownError", latency: Date.now() - startedAt },
+        "Supabase health probe failed",
+      );
+    }
     res.status(503).json({ supabase: "failed", latency: Date.now() - startedAt });
   }
 });
