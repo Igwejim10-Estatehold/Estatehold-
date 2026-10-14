@@ -30,6 +30,7 @@ import {
 import NotFound from '@/pages/not-found';
 import LandlordKycPage from '@/pages/LandlordKycPage';
 import EstateholdMap from '@/components/EstateholdMap';
+import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
 
 const queryClient = new QueryClient();
 const routes = [
@@ -115,6 +116,9 @@ function AppContent() {
   const [propertyRoute, propertyRouteParams] = useRoute('/property/:id');
   const [mobileMore, setMobileMore] = useState(false);
   const [notice, setNotice] = useState('');
+  const [propertyProof, setPropertyProof] = useState<LivePropertyProof | null>(null);
+  const [propertyProofError, setPropertyProofError] = useState('');
+  const [listingCoordinates, setListingCoordinates] = useState({ latitude: 0, longitude: 0 });
   const [authSession, setAuthSession] = useState<{ access_token: string; user?: { email?: string; id?: string } } | null>(() => {
     try { const raw = localStorage.getItem('estatehold-session'); return raw ? JSON.parse(raw) : null; } catch { return null; }
   });
@@ -234,6 +238,10 @@ function AppContent() {
   const submitWith = (handler: (data: FormData) => void) => (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); handler(new FormData(event.currentTarget));
   };
+  const syncListingCoordinates = (event: FormEvent<HTMLFormElement>) => {
+    const form = new FormData(event.currentTarget);
+    setListingCoordinates({ latitude: Number(form.get('latitude')) || 0, longitude: Number(form.get('longitude')) || 0 });
+  };
   const refresh = (key: readonly unknown[]) => queryClient.invalidateQueries({ queryKey: key });
   const statusMessage = (message: string) => { setNotice(message); };
   const submitAuth = async (event: FormEvent<HTMLFormElement>, mode: 'sign-in' | 'sign-up') => {
@@ -256,6 +264,7 @@ function AppContent() {
   const shellRoutes = ['/sign-in','/sign-up'];
   const routeTitle = routes.find(([path]) => path === location)?.[1] || '';
   const submitProperty = (fd: FormData) => {
+    setPropertyProofError('');
     const input = {
       title: String(fd.get('title')), category: String(fd.get('category')) as Property['category'], customType: String(fd.get('customType') || '') || undefined,
       state: String(fd.get('state')), town: String(fd.get('town')), address: String(fd.get('address') || '') || undefined, description: String(fd.get('description') || '') || undefined,
@@ -269,7 +278,31 @@ function AppContent() {
       hotelCctvDisclosed: Boolean(fd.get('hotelCctvDisclosed')),
       hotelSafetyCheckinAvailable: Boolean(fd.get('hotelSafetyCheckinAvailable')),
     };
-    createProperty.mutate({ data: input }, { onSuccess: result => { refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getListPropertiesQueryKey({})); refresh(getGetDashboardQueryKey()); statusMessage(result.hotelVerificationStatus === 'pending' ? 'Hotel submission received. It will appear in the verified directory only after admin review.' : 'Listing submitted for review.'); navigate(result.category === 'hotel' || result.category === 'short_let' ? '/hotels' : `/property/${result.id}`); } });
+    if (propertyProof && distanceMeters(propertyProof.latitude, propertyProof.longitude, input.latitude, input.longitude) > 100) {
+      setPropertyProofError('The live photo must be taken within 100m of the listing coordinates.');
+      return;
+    }
+    createProperty.mutate({ data: input }, { onSuccess: async result => {
+      let proofSaved = false;
+      let proofFailure = '';
+      if (propertyProof) {
+        try {
+          if (!authSession || !profile.data?.id || !config.data?.supabaseUrl || !config.data.supabaseAnonKey) throw new Error('Secure photo storage is unavailable.');
+          const path = `${profile.data.id}/property-verification/${result.id}/${crypto.randomUUID()}.jpg`;
+          const storageUrl = `${config.data.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/estatehold-evidence/${path.split('/').map(encodeURIComponent).join('/')}`;
+          const upload = await fetch(storageUrl, { method: 'POST', headers: { apikey: config.data.supabaseAnonKey, Authorization: `Bearer ${authSession.access_token}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: propertyProof.file });
+          if (!upload.ok) throw new Error('Private photo storage rejected the upload.');
+          const saved = await fetch(`/api/properties/${encodeURIComponent(result.id)}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authSession.access_token}` }, body: JSON.stringify({ photoUrl: path, latitude: propertyProof.latitude, longitude: propertyProof.longitude, takenAt: propertyProof.takenAt, device: propertyProof.device }) });
+          const payload = await saved.json();
+          if (!saved.ok) throw new Error(payload.message || 'Photo verification could not be saved.');
+          proofSaved = true;
+        } catch (error) { proofFailure = error instanceof Error ? error.message : 'Photo verification could not be saved.'; }
+      }
+      refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getListPropertiesQueryKey({})); refresh(getGetDashboardQueryKey());
+      statusMessage(proofFailure ? `Listing submitted, but its live photo was not saved: ${proofFailure}` : propertyProof && proofSaved ? 'Listing and live location photo submitted for review.' : result.hotelVerificationStatus === 'pending' ? 'Hotel submission received. It will appear in the verified directory only after admin review.' : 'Listing submitted for review.');
+      setPropertyProof(null);
+      navigate(result.category === 'hotel' || result.category === 'short_let' ? '/hotels' : `/property/${result.id}`);
+    } });
   };
   const submitRequest = (fd: FormData) => {
     const input: SpecialRequestInput = {
@@ -458,9 +491,11 @@ function AppContent() {
               {p.hotelSafetyCheckinAvailable && p.emergencyContactPhone && <div className="mt-2 w-full rounded-xl bg-[#f7f9f5] p-3"><label className="flex items-start gap-2 text-xs leading-5 text-[#59695e]"><input type="checkbox" checked={Boolean(checkInConsents[p.id])} onChange={e=>setCheckInConsents(s=>({...s,[p.id]:e.target.checked}))} className="mt-1 accent-[#16A34A]"/>I consent to request an optional safety check-in via SMS. No location or room activity is shared by Estatehold.</label>{checkInConsents[p.id] && <a className="mt-3 inline-flex text-sm font-bold text-[#18783a]" href={`sms:${encodeURIComponent(p.emergencyContactPhone)}?body=${encodeURIComponent(`I consent to a voluntary safety check-in for my stay at ${p.title}.`)}`}>Open SMS to request check-in</a>}</div>}</div>
             </div></article>)}</div> : <EmptyState icon={Building2} title="No verified stays yet" body="Only accommodation with approved hotel and location verification appears here. Owners can submit a hotel or short-let for review below."/>}
           <section className="mx-auto max-w-3xl space-y-4"><PageIntro eyebrow="For hotel & short-let owners" title="Submit an accommodation listing" text="CAC and contact details are private to the verification team. Approval is required before a listing appears in the verified directory."/>
-            {!authSession ? <Notice tone="amber">Sign in with an owner or agent account to submit a listing. <Link href="/sign-in" className="font-bold underline">Sign in</Link></Notice> : <form onSubmit={submitWith(submitProperty)} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
+            {!authSession ? <Notice tone="amber">Sign in with an owner or agent account to submit a listing. <Link href="/sign-in" className="font-bold underline">Sign in</Link></Notice> : <form onChange={syncListingCoordinates} onSubmit={submitWith(submitProperty)} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
               <div className="grid gap-4 sm:grid-cols-2"><Field label="Accommodation name" name="title" required/><SelectField label="Type" name="category" options={[['hotel','Hotel'],['short_let','Short-let']]}/><Field label="CAC registration number" name="hotelCacNumber" required/><Field label="Public reception / emergency contact" name="emergencyContactPhone" type="tel" required placeholder="+234…"/><Field label="State" name="state" required/><Field label="City / town" name="town" required/><Field label="Street address" name="address" required/><Field label="Price (₦)" name="priceNaira" type="number" min={1} required/><Field label="Price unit" name="priceUnit" defaultValue="per night"/><Field label="Guest terms / house rules URL" name="premisesRulesUrl" type="url" required placeholder="https://…"/><Field label="Latitude" name="latitude" type="number" step={0.000001} required/><Field label="Longitude" name="longitude" type="number" step={0.000001} required/></div>
               <div className="space-y-3 rounded-xl bg-[#f7f9f5] p-4 text-sm"><label className="flex gap-2"><input type="checkbox" name="hotelHas24HourReception" className="mt-1 accent-[#16A34A]"/>24-hour reception is available</label><label className="flex gap-2"><input type="checkbox" name="hotelCctvCommonAreas" className="mt-1 accent-[#16A34A]"/>CCTV is used in common areas</label><label className="flex gap-2"><input type="checkbox" name="hotelSafetyCheckinAvailable" className="mt-1 accent-[#16A34A]"/>Offer voluntary safety check-in by SMS</label><label className="flex gap-2 font-semibold"><input type="checkbox" name="hotelCctvDisclosed" required className="mt-1 accent-[#16A34A]"/>I confirm there is no monitoring inside guest rooms and any CCTV is disclosed and limited to common areas.</label></div>
+               <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
+               {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
               <TextArea label="Accommodation details" name="description" placeholder="Share information guests need before booking."/>
               {createProperty.isError && <Notice tone="red">Could not submit. Sign in with an owner/agent account and check the required listing details.</Notice>}
               <Button type="submit" disabled={createProperty.isPending}>{createProperty.isPending ? 'Submitting…' : 'Submit for verification'}</Button>
@@ -488,10 +523,12 @@ function AppContent() {
         return <MapSearchPage properties={filteredProperties} loading={propertiesQuery.isLoading} failed={propertiesQuery.isError} apiKey={googleMapsKey} mapsState={googleMapsState} onRetry={() => propertiesQuery.refetch()}/>;
       case '/list-property':
         return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="For owners & agents" title="Add a property" text="Share accurate details. Location verification makes the listing clearer for everyone."/><Notice>Your pin location is part of the listing review. Use the property’s real coordinates; new pins show as pending until verified.</Notice>
-          <form onSubmit={submitWith(submitProperty)} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
+          <form onChange={syncListingCoordinates} onSubmit={submitWith(submitProperty)} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Listing title" name="title" required placeholder="e.g. Two-bedroom apartment near..." /><SelectField label="Property type" name="category" options={[['home','Home'],['land','Land'],['warehouse','Warehouse'],['complex','Complex'],['shopping_mall','Shopping mall'],['hotel','Hotel'],['short_let','Short-let'],['school','School'],['hospital','Hospital'],['filling_station','Filling station'],['worship_center','Worship center'],['factory','Factory'],['multipurpose_hall','Multipurpose hall'],['custom','Other / custom']]} />
               <Field label="Custom property type (optional)" name="customType" placeholder="Describe the type"/><SelectField label="Listing intent" name="intent" options={[['sale','For sale'],['rent','For rent'],['lease','For lease'],['social','Shared housing']]} />
               <Field label="State" name="state" required placeholder="Lagos"/><Field label="Town / city" name="town" required placeholder="Ikeja"/><Field label="Street address" name="address" placeholder="Street, estate or landmark"/><Field label="Price in naira" name="priceNaira" type="number" min={1} required placeholder="0"/><Field label="Price unit" name="priceUnit" placeholder="per year, total…"/><Field label="Bedrooms" name="bedrooms" type="number" min={0}/><Field label="Bathrooms" name="bathrooms" type="number" min={0}/><Field label="Size (m²)" name="sizeSqm" type="number" min={0}/><Field label="Latitude" name="latitude" type="number" step={0.000001} required placeholder="6.5244"/><Field label="Longitude" name="longitude" type="number" step={0.000001} required placeholder="3.3792"/><Field label="Image URL (optional)" name="imageUrl" placeholder="https://…"/><Field label="Premises rules URL (optional)" name="premisesRulesUrl" placeholder="https://…"/></div>
+            <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
+            {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
             <TextArea label="Description" name="description" placeholder="Share the details a renter or buyer should know."/>
             {createProperty.isError && <Notice tone="red">The listing could not be submitted. Please review the fields and try again.</Notice>}
             <Button type="submit" disabled={createProperty.isPending} testId="button-submit-property">{createProperty.isPending ? <><LoaderCircle className="animate-spin" size={16}/>Saving listing…</> : 'Submit for listing review'}</Button>

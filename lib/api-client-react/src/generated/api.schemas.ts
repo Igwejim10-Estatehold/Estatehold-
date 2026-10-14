@@ -178,6 +178,43 @@ export interface PropertyInput {
   hotelSafetyCheckinAvailable?: boolean;
 }
 
+export interface PropertyPhotoInput {
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  photoUrl: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude: number;
+  takenAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  device: string;
+}
+
+export interface PropertyPhoto {
+  id: string;
+  propertyId: string;
+  photoUrl: string;
+  latitude: number;
+  longitude: number;
+  takenAt: string;
+  takenBy: string;
+  device: string;
+  distanceMeters: number;
+  within100m: boolean;
+}
+
 export type DashboardDataSource = typeof DashboardDataSource[keyof typeof DashboardDataSource];
 
 

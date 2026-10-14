@@ -1,6 +1,8 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import {
   CreatePropertyBody,
+  CreatePropertyPhotoBody,
+  CreatePropertyPhotoResponse,
   CreatePropertyResponse,
   GetDashboardResponse,
   GetPropertyParams,
@@ -219,6 +221,50 @@ router.post(
     res.status(201).json(response);
   },
 );
+
+router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CreatePropertyPhotoBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Add a valid live photo and location reading." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const propertyId = String(req.params.propertyId);
+  const rows = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(propertyId)}&select=id,owner_id,gps_lat,gps_lng&limit=1`);
+  const property = rows[0];
+  if (!property) { res.status(404).json({ message: "Property not found." }); return; }
+  if (property["owner_id"] !== user.id) { res.status(403).json({ message: "Only the listing owner can attach a verification photo." }); return; }
+  const photoPath = parsed.data.photoUrl;
+  if (!photoPath.startsWith(`${user.id}/property-verification/${propertyId}/`) || !photoPath.endsWith(".jpg")) {
+    res.status(400).json({ message: "The photo must be in your private property-verification folder." });
+    return;
+  }
+  const takenAt = parsed.data.takenAt.getTime();
+  const ageMs = Date.now() - takenAt;
+  if (!Number.isFinite(takenAt) || ageMs < -60_000 || ageMs > 30 * 60_000) {
+    res.status(400).json({ message: "Capture a fresh live photo before submitting." });
+    return;
+  }
+  const rad = Math.PI / 180;
+  const dLat = (parsed.data.latitude - Number(property["gps_lat"])) * rad;
+  const dLng = (parsed.data.longitude - Number(property["gps_lng"])) * rad;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(Number(property["gps_lat"]) * rad) * Math.cos(parsed.data.latitude * rad) * Math.sin(dLng / 2) ** 2;
+  const distanceMeters = 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  if (distanceMeters > 100) {
+    res.status(422).json({ message: `Photo location is ${Math.round(distanceMeters)}m from the listing pin. Capture within 100m.` });
+    return;
+  }
+  const saved = await supabaseRest<DbRow[]>("property_photos?select=*", {
+    method: "POST",
+    body: { property_id: propertyId, photo_url: photoPath, lat: parsed.data.latitude, lng: parsed.data.longitude, taken_at: new Date(takenAt).toISOString(), taken_by: user.id, device: parsed.data.device },
+    prefer: "return=representation",
+  });
+  res.status(201).json(CreatePropertyPhotoResponse.parse({
+    id: saved[0]?.["id"], propertyId, photoUrl: photoPath, latitude: parsed.data.latitude, longitude: parsed.data.longitude,
+    takenAt: new Date(takenAt).toISOString(), takenBy: user.id, device: parsed.data.device, distanceMeters, within100m: true,
+  }));
+});
 
 router.get("/properties/:propertyId", async (req, res): Promise<void> => {
   const parsed = GetPropertyParams.safeParse(req.params);

@@ -335,6 +335,47 @@ export const GetPropertyResponse = zod.object({
 
 
 /**
+ * @summary Save a live property verification photo
+ */
+export const CreatePropertyPhotoParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const createPropertyPhotoBodyPhotoUrlMax = 500;
+
+export const createPropertyPhotoBodyLatitudeMin = -90;
+export const createPropertyPhotoBodyLatitudeMax = 90;
+
+export const createPropertyPhotoBodyLongitudeMin = -180;
+export const createPropertyPhotoBodyLongitudeMax = 180;
+
+export const createPropertyPhotoBodyDeviceMax = 200;
+
+
+
+export const CreatePropertyPhotoBody = zod.object({
+  "photoUrl": zod.string().min(1).max(createPropertyPhotoBodyPhotoUrlMax),
+  "latitude": zod.number().min(createPropertyPhotoBodyLatitudeMin).max(createPropertyPhotoBodyLatitudeMax),
+  "longitude": zod.number().min(createPropertyPhotoBodyLongitudeMin).max(createPropertyPhotoBodyLongitudeMax),
+  "takenAt": zod.coerce.date(),
+  "device": zod.string().min(1).max(createPropertyPhotoBodyDeviceMax)
+})
+
+export const CreatePropertyPhotoResponse = zod.object({
+  "id": zod.string(),
+  "propertyId": zod.string(),
+  "photoUrl": zod.string(),
+  "latitude": zod.number(),
+  "longitude": zod.number(),
+  "takenAt": zod.coerce.date(),
+  "takenBy": zod.string(),
+  "device": zod.string(),
+  "distanceMeters": zod.number(),
+  "within100m": zod.boolean()
+})
+
+
+/**
  * @summary Create a property transaction and place a delisting lock
  */
 export const createTransactionBodyInstallmentCountMin = 2;

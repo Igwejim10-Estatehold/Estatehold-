@@ -159,6 +159,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Property"
+  /properties/{propertyId}/photos:
+    post:
+      operationId: createPropertyPhoto
+      tags: [marketplace]
+      summary: Save a live property verification photo
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyPhotoInput"
+      responses:
+        "201":
+          description: Property photo saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyPhoto"
   /transactions:
     post:
       operationId: createTransaction
@@ -941,6 +963,29 @@ components:
         hotelCctvCommonAreas: { type: boolean }
         hotelCctvDisclosed: { type: boolean }
         hotelSafetyCheckinAvailable: { type: boolean }
+    PropertyPhotoInput:
+      type: object
+      required: [photoUrl, latitude, longitude, takenAt, device]
+      properties:
+        photoUrl: { type: string, minLength: 1, maxLength: 500 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        takenAt: { type: string, format: date-time }
+        device: { type: string, minLength: 1, maxLength: 200 }
+    PropertyPhoto:
+      type: object
+      required: [id, propertyId, photoUrl, latitude, longitude, takenAt, takenBy, device, distanceMeters, within100m]
+      properties:
+        id: { type: string }
+        propertyId: { type: string }
+        photoUrl: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        takenAt: { type: string, format: date-time }
+        takenBy: { type: string }
+        device: { type: string }
+        distanceMeters: { type: number }
+        within100m: { type: boolean }
     Dashboard:
       type: object
       required: [items, location, greeting]

@@ -88,6 +88,8 @@ export * from './propertyInput';
 export * from './propertyInputIntent';
 export * from './propertyIntent';
 export * from './propertyListingModerationStatus';
+export * from './propertyPhoto';
+export * from './propertyPhotoInput';
 export * from './publicConfig';
 export * from './publicConfigPaymentMode';
 export * from './reviewLandlordKycInput';
