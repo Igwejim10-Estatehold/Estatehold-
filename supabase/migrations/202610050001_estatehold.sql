@@ -387,10 +387,7 @@ insert into public.properties (
    45000000, 'total', 'sale', 4, 3, 320, 6.4740, 7.5600, 'pending', true, false, true),
   ('Aguani Land', 'land', 'Enugu', 'Uzo-Uwani', 'Aguani', 'Aguani, Uzo-Uwani LGA',
    'Demo land listing, 1,200 square metres. Boundaries and title are not verified in this sample record.',
-   8500000, 'total', 'sale', 0, 0, 1200, 6.6810, 7.3650, 'pending', true, false, true),
-  ('Golden Palms Hotel', 'hotel', 'Enugu', 'Enugu North', 'Enugu', 'Enugu, Enugu State',
-   'Demo nightly stay listing. Confirm availability and accommodation terms before booking.',
-   25000, 'night', 'rent', 1, 1, 0, 6.4490, 7.5100, 'pending', true, false, true)
+   8500000, 'total', 'sale', 0, 0, 1200, 6.6810, 7.3650, 'pending', true, false, true)
 on conflict do nothing;
 
 insert into public.social_housing_units (parent_property_id, unit_type, unit_price_naira, status)
