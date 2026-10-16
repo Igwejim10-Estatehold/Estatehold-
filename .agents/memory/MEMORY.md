@@ -2,3 +2,4 @@
 - [Estatehold office location](estatehold-offices.md) — User-confirmed HQ marker is Emene, Enugu; phone and support hours are not yet provided.
 - [Estatehold property proof](estatehold-property-proof.md) — Live camera and GPS evidence is a top priority for reducing fake-landlord risk.
 - [Supabase connection credentials](supabase-connection-credentials.md) — Use the exact database URI and username from Supabase Connect; pooler ports and usernames vary.
+- [Construction request privacy](estatehold-construction-requests.md) — Keep project requests in the authenticated Supabase admin queue with land documents in private storage.

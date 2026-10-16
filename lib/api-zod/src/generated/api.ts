@@ -592,6 +592,106 @@ export const CreateSpecialRequestResponse = zod.object({
 
 
 /**
+ * @summary Submit a construction project request
+ */
+export const createConstructionRequestBodyFullNameMax = 160;
+
+export const createConstructionRequestBodyPhoneMin = 7;
+export const createConstructionRequestBodyPhoneMax = 40;
+
+export const createConstructionRequestBodyLandLocationMax = 240;
+
+export const createConstructionRequestBodyLandSizeMax = 80;
+
+export const createConstructionRequestBodyBudgetMax = 100;
+
+export const createConstructionRequestBodyProjectTypeMax = 120;
+
+export const createConstructionRequestBodyDescriptionMax = 3000;
+
+
+
+export const CreateConstructionRequestBody = zod.object({
+  "fullName": zod.string().min(1).max(createConstructionRequestBodyFullNameMax),
+  "phone": zod.string().min(createConstructionRequestBodyPhoneMin).max(createConstructionRequestBodyPhoneMax),
+  "landLocation": zod.string().min(1).max(createConstructionRequestBodyLandLocationMax),
+  "landSize": zod.string().min(1).max(createConstructionRequestBodyLandSizeMax),
+  "budget": zod.string().min(1).max(createConstructionRequestBodyBudgetMax),
+  "projectType": zod.string().min(1).max(createConstructionRequestBodyProjectTypeMax),
+  "description": zod.string().max(createConstructionRequestBodyDescriptionMax).optional(),
+  "preferredVisitDate": zod.coerce.date().optional()
+})
+
+export const CreateConstructionRequestResponse = zod.object({
+  "id": zod.string().uuid(),
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "landLocation": zod.string(),
+  "landSize": zod.string(),
+  "budget": zod.string(),
+  "projectType": zod.string(),
+  "description": zod.string().optional(),
+  "preferredVisitDate": zod.coerce.date().optional(),
+  "documentPath": zod.string().optional(),
+  "status": zod.enum(['pending', 'contacted', 'in_progress', 'completed', 'declined']),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const AttachConstructionRequestDocumentParams = zod.object({
+  "requestId": zod.coerce.string().uuid()
+})
+
+export const attachConstructionRequestDocumentBodyObjectPathMax = 500;
+
+
+
+export const AttachConstructionRequestDocumentBody = zod.object({
+  "objectPath": zod.string().max(attachConstructionRequestDocumentBodyObjectPathMax)
+})
+
+export const AttachConstructionRequestDocumentResponse = zod.object({
+  "id": zod.string().uuid(),
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "landLocation": zod.string(),
+  "landSize": zod.string(),
+  "budget": zod.string(),
+  "projectType": zod.string(),
+  "description": zod.string().optional(),
+  "preferredVisitDate": zod.coerce.date().optional(),
+  "documentPath": zod.string().optional(),
+  "status": zod.enum(['pending', 'contacted', 'in_progress', 'completed', 'declined']),
+  "createdAt": zod.coerce.date()
+})
+
+
+export const ListAdminConstructionRequestsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().uuid(),
+  "fullName": zod.string(),
+  "phone": zod.string(),
+  "landLocation": zod.string(),
+  "landSize": zod.string(),
+  "budget": zod.string(),
+  "projectType": zod.string(),
+  "description": zod.string().optional(),
+  "preferredVisitDate": zod.coerce.date().optional(),
+  "documentPath": zod.string().optional(),
+  "status": zod.enum(['pending', 'contacted', 'in_progress', 'completed', 'declined']),
+  "createdAt": zod.coerce.date()
+}))
+})
+
+
+export const GetAdminConstructionRequestDocumentParams = zod.object({
+  "requestId": zod.coerce.string().uuid()
+})
+
+export const GetAdminConstructionRequestDocumentResponse = zod.unknown()
+
+
+/**
  * @summary List user complaints
  */
 export const ListComplaintsResponse = zod.object({

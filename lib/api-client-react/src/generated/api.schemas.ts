@@ -1007,6 +1007,73 @@ export interface Error {
   message: string;
 }
 
+export interface ConstructionRequestInput {
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  fullName: string;
+  /**
+     * @minLength 7
+     * @maxLength 40
+     */
+  phone: string;
+  /**
+     * @minLength 1
+     * @maxLength 240
+     */
+  landLocation: string;
+  /**
+     * @minLength 1
+     * @maxLength 80
+     */
+  landSize: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  budget: string;
+  /**
+     * @minLength 1
+     * @maxLength 120
+     */
+  projectType: string;
+  /** @maxLength 3000 */
+  description?: string;
+  preferredVisitDate?: string;
+}
+
+export interface AttachConstructionRequestDocumentInput {
+  /** @maxLength 500 */
+  objectPath: string;
+}
+
+export type ConstructionRequestStatus = typeof ConstructionRequestStatus[keyof typeof ConstructionRequestStatus];
+
+
+export const ConstructionRequestStatus = {
+  pending: 'pending',
+  contacted: 'contacted',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  declined: 'declined',
+} as const;
+
+export interface ConstructionRequest {
+  id: string;
+  fullName: string;
+  phone: string;
+  landLocation: string;
+  landSize: string;
+  budget: string;
+  projectType: string;
+  description?: string;
+  preferredVisitDate?: string;
+  documentPath?: string;
+  status: ConstructionRequestStatus;
+  createdAt: string;
+}
+
 export type ListPropertiesParams = {
 category?: PropertyCategory;
 intent?: ListPropertiesIntent;
@@ -1043,6 +1110,10 @@ export type ListSocialHousingUnits200 = {
 
 export type ListSpecialRequests200 = {
   items: SpecialRequest[];
+};
+
+export type ListAdminConstructionRequests200 = {
+  items: ConstructionRequest[];
 };
 
 export type ListComplaints200 = {

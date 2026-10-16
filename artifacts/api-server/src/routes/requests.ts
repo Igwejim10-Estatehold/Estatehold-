@@ -2,16 +2,111 @@ import { Router, type IRouter } from "express";
 import {
   CreateComplaintBody,
   CreateComplaintResponse,
+  CreateConstructionRequestBody,
+  CreateConstructionRequestResponse,
   CreateSpecialRequestBody,
   CreateSpecialRequestResponse,
+  AttachConstructionRequestDocumentBody,
+  AttachConstructionRequestDocumentParams,
+  AttachConstructionRequestDocumentResponse,
+  ListAdminConstructionRequestsResponse,
   ListComplaintsResponse,
   ListSpecialRequestsResponse,
 } from "@workspace/api-zod";
-import { getUserRole, requireAuth, requireUser } from "../lib/auth";
+import { getUserRole, requireAuth, requireRoles, requireUser } from "../lib/auth";
 import { mapComplaint, mapSpecialRequest, type DbRow } from "../lib/estatehold";
-import { getSupabaseUrl, supabaseRest } from "../lib/supabase";
+import { fetchPrivateConstructionDocument, getSupabaseUrl, supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+function mapConstructionRequest(row: DbRow) {
+  return {
+    id: String(row["id"]),
+    fullName: String(row["full_name"]),
+    phone: String(row["phone"]),
+    landLocation: String(row["land_location"]),
+    landSize: String(row["land_size"]),
+    budget: String(row["budget"]),
+    projectType: String(row["project_type"]),
+    description: String(row["description"] ?? ""),
+    preferredVisitDate: row["preferred_visit_date"] ? String(row["preferred_visit_date"]) : undefined,
+    documentPath: typeof row["document_path"] === "string" ? row["document_path"] : undefined,
+    status: String(row["status"]),
+    createdAt: String(row["created_at"]),
+  };
+}
+
+router.post("/construction/requests", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CreateConstructionRequestBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ message: "Check the construction request details." }); return; }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const input = parsed.data;
+  const rows = await supabaseRest<DbRow[]>("construction_requests?select=*", {
+    method: "POST",
+    body: {
+      requester_id: user.id,
+      full_name: input.fullName.trim(),
+      phone: input.phone.trim(),
+      land_location: input.landLocation.trim(),
+      land_size: input.landSize.trim(),
+      budget: input.budget.trim(),
+      project_type: input.projectType.trim(),
+      description: input.description?.trim() ?? "",
+      preferred_visit_date: input.preferredVisitDate?.toISOString().slice(0, 10) ?? null,
+    },
+    prefer: "return=representation",
+  });
+  res.status(201).json(CreateConstructionRequestResponse.parse(mapConstructionRequest(rows[0])));
+});
+
+router.patch("/construction/requests/:requestId/document", requireAuth, async (req, res): Promise<void> => {
+  const params = AttachConstructionRequestDocumentParams.safeParse(req.params);
+  const input = AttachConstructionRequestDocumentBody.safeParse(req.body);
+  if (!params.success || !input.success) { res.status(400).json({ message: "Invalid request or document reference." }); return; }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const rows = await supabaseRest<DbRow[]>(`construction_requests?id=eq.${encodeURIComponent(params.data.requestId)}&select=id,requester_id&limit=1`);
+  if (!rows[0]) { res.status(404).json({ message: "Construction request not found." }); return; }
+  const prefix = `${user.id}/construction-requests/${params.data.requestId}/`;
+  if (rows[0]["requester_id"] !== user.id || !input.data.objectPath.startsWith(prefix) || input.data.objectPath.includes("..")) {
+    res.status(403).json({ message: "The document must belong to your construction request." }); return;
+  }
+  const updated = await supabaseRest<DbRow[]>(`construction_requests?id=eq.${encodeURIComponent(params.data.requestId)}&requester_id=eq.${encodeURIComponent(user.id)}&select=*`, {
+    method: "PATCH", body: { document_path: input.data.objectPath }, prefer: "return=representation",
+  });
+  if (!updated[0]) { res.status(404).json({ message: "Construction request not found." }); return; }
+  res.json(AttachConstructionRequestDocumentResponse.parse(mapConstructionRequest(updated[0])));
+});
+
+router.get("/admin/construction-requests", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const rows = await supabaseRest<DbRow[]>("construction_requests?select=*&order=created_at.desc&limit=250");
+  res.json(ListAdminConstructionRequestsResponse.parse({ items: rows.map(mapConstructionRequest) }));
+});
+
+router.get("/admin/construction-requests/:requestId/document", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const id = String(req.params.requestId || "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) { res.status(400).json({ message: "Invalid construction request ID." }); return; }
+  const rows = await supabaseRest<DbRow[]>(`construction_requests?id=eq.${encodeURIComponent(id)}&select=document_path,requester_id&limit=1`);
+  const path = rows[0]?.["document_path"];
+  const ownerId = String(rows[0]?.["requester_id"] ?? "");
+  if (typeof path !== "string" || !path.startsWith(`${ownerId}/construction-requests/${id}/`)) {
+    res.status(404).json({ message: "Private document not found." }); return;
+  }
+  const stored = await fetchPrivateConstructionDocument(path);
+  if (!stored.ok) { res.status(stored.status === 404 ? 404 : 503).json({ message: "Private document is unavailable." }); return; }
+  const contentType = stored.headers.get("content-type") || "application/octet-stream";
+  if (!["application/pdf", "image/jpeg", "image/png"].includes(contentType.split(";")[0])) {
+    res.status(415).json({ message: "Unsupported private document type." }); return;
+  }
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", "attachment");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(Buffer.from(await stored.arrayBuffer()));
+});
 
 router.get("/special-requests", requireAuth, async (req, res): Promise<void> => {
   const user = await requireUser(req, res);

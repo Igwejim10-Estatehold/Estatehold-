@@ -322,6 +322,86 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SpecialRequest"
+  /construction/requests:
+    post:
+      operationId: createConstructionRequest
+      tags: [requests]
+      summary: Submit a construction project request
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConstructionRequestInput"
+      responses:
+        "201":
+          description: Construction request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConstructionRequest"
+  /construction/requests/{requestId}/document:
+    patch:
+      operationId: attachConstructionRequestDocument
+      tags: [requests]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachConstructionRequestDocumentInput"
+      responses:
+        "200":
+          description: Private document linked to request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConstructionRequest"
+  /admin/construction-requests:
+    get:
+      operationId: listAdminConstructionRequests
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Construction request queue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ConstructionRequest"
+  /admin/construction-requests/{requestId}/document:
+    get:
+      operationId: getAdminConstructionRequestDocument
+      tags: [admin]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Private land document bytes
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
   /complaints:
     get:
       operationId: listComplaints
@@ -1576,3 +1656,36 @@ components:
       required: [message]
       properties:
         message: { type: string }
+    ConstructionRequestInput:
+      type: object
+      required: [fullName, phone, landLocation, landSize, budget, projectType]
+      properties:
+        fullName: { type: string, minLength: 1, maxLength: 160 }
+        phone: { type: string, minLength: 7, maxLength: 40 }
+        landLocation: { type: string, minLength: 1, maxLength: 240 }
+        landSize: { type: string, minLength: 1, maxLength: 80 }
+        budget: { type: string, minLength: 1, maxLength: 100 }
+        projectType: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 3000 }
+        preferredVisitDate: { type: string, format: date }
+    AttachConstructionRequestDocumentInput:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath: { type: string, maxLength: 500 }
+    ConstructionRequest:
+      type: object
+      required: [id, fullName, phone, landLocation, landSize, budget, projectType, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        phone: { type: string }
+        landLocation: { type: string }
+        landSize: { type: string }
+        budget: { type: string }
+        projectType: { type: string }
+        description: { type: string }
+        preferredVisitDate: { type: string, format: date }
+        documentPath: { type: string }
+        status: { type: string, enum: [pending, contacted, in_progress, completed, declined] }
+        createdAt: { type: string, format: date-time }

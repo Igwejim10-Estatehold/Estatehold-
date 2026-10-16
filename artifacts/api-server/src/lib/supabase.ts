@@ -63,6 +63,17 @@ export async function fetchPrivatePropertyPhoto(path: string): Promise<globalThi
   return response;
 }
 
+export async function fetchPrivateConstructionDocument(path: string): Promise<globalThis.Response> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  return fetch(
+    `${getSupabaseUrl()}/storage/v1/object/estatehold-construction-documents/${encodedPath}`,
+    {
+      headers: { apikey: getServiceRoleKey(), Authorization: `Bearer ${getServiceRoleKey()}` },
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+}
+
 export function getPublicConfig() {
   let supabaseUrl = "";
   try {
