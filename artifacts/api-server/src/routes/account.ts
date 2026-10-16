@@ -35,11 +35,17 @@ router.get("/account/payout-banks", requireAuth, async (req, res): Promise<void>
     res.status(503).json({ message: "Paystack account verification is not configured." });
     return;
   }
-    const response = CreateTenancyAgreementResponse.parse({
-      id: String(rows[0]?.["id"] ?? ""),
-      status: "draft",
-      reviewNotice,
-    });
+  let response: globalThis.Response;
+  try {
+    response = await fetch(
+      "https://api.paystack.co/bank?country=nigeria&currency=NGN&type=nuban&perPage=200",
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+  } catch (error) {
+    req.log.warn({ error }, "Paystack bank directory request failed");
+    res.status(502).json({ message: "The bank list is temporarily unavailable." });
+    return;
+  }
   const result = (await response.json().catch(() => null)) as
     | { status?: boolean; data?: PaystackBank[] }
     | null;
@@ -95,41 +101,25 @@ function mapLandlordKycStatus(row?: DbRow) {
 }
 
 router.get("/landlord-kyc", requireAuth, async (req, res): Promise<void> => {
-    const user = await requireUser(req, res);
+  const user = await requireUser(req, res);
   if (!user) return;
   if ((await getUserRole(user.id)) !== "landlord") {
     res.status(403).json({ message: "Landlord verification is only available to landlord accounts." });
     return;
   }
-    const rows = await supabaseRest<DbRow[]>("legal_docs?select=*", {
-      method: "POST",
-      body: {
-        property_id: input.propertyId,
-        created_by: user.id,
-        doc_type: "tenancy_agreement",
-        status: "draft",
-        document: {
-          tenantName: input.tenantName.trim(),
-          landlordName: input.landlordName.trim(),
-          rentNaira: input.rentNaira,
-          paymentMode: input.paymentMode,
-          premisesRulesUrl,
-          mediationClause,
-          reviewNotice,
-        },
-      },
-      prefer: "return=representation",
-    });
+  const rows = await supabaseRest<DbRow[]>(
+    `landlord_kyc?user_id=eq.${encodeURIComponent(user.id)}&select=nin_last4,nin_verified,indemnity_signed,review_status,property_doc_url,affidavit_url,signed_at&limit=1`,
+  );
   res.json(GetLandlordKycResponse.parse(mapLandlordKycStatus(rows[0])));
 });
 
 router.post("/landlord-kyc", requireAuth, async (req, res): Promise<void> => {
-    const parsed = CreateTenancyAgreementBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ message: "Check the agreement details and try again." });
-      return;
-    }
-    const user = await requireUser(req, res);
+  const parsed = SubmitLandlordKycBody.safeParse(req.body);
+  if (!parsed.success || parsed.data.indemnityTextVersion !== LANDLORD_INDEMNITY_TEXT_VERSION) {
+    res.status(400).json({ message: "Complete the landlord KYC form and sign the current indemnity." });
+    return;
+  }
+  const user = await requireUser(req, res);
   if (!user) return;
   if ((await getUserRole(user.id)) !== "landlord") {
     res.status(403).json({ message: "Landlord verification is only available to landlord accounts." });
@@ -202,10 +192,17 @@ const payoutDestinationHandler = async (req: Request, res: Response): Promise<vo
     return;
   }
 
-  const bankResponse = await fetch(
-    "https://api.paystack.co/bank?country=nigeria&currency=NGN&type=nuban&perPage=200",
-    { headers: { Authorization: `Bearer ${secretKey}` } },
-  );
+  let bankResponse: globalThis.Response;
+  try {
+    bankResponse = await fetch(
+      "https://api.paystack.co/bank?country=nigeria&currency=NGN&type=nuban&perPage=200",
+      { headers: { Authorization: `Bearer ${secretKey}` } },
+    );
+  } catch (error) {
+    req.log.warn({ error }, "Paystack bank directory validation failed");
+    res.status(502).json({ message: "The bank list is temporarily unavailable." });
+    return;
+  }
   const bankResult = (await bankResponse.json().catch(() => null)) as
     | { status?: boolean; data?: PaystackBank[] }
     | null;
@@ -227,9 +224,16 @@ const payoutDestinationHandler = async (req: Request, res: Response): Promise<vo
     account_number: accountNumber,
     bank_code: parsed.data.bankCode,
   });
-  const response = await fetch(`https://api.paystack.co/bank/resolve?${query}`, {
-    headers: { Authorization: `Bearer ${secretKey}` },
-  });
+  let response: globalThis.Response;
+  try {
+    response = await fetch(`https://api.paystack.co/bank/resolve?${query}`, {
+      headers: { Authorization: `Bearer ${secretKey}` },
+    });
+  } catch (error) {
+    req.log.warn({ error }, "Paystack account resolution request failed");
+    res.status(502).json({ message: "Paystack account verification is temporarily unavailable." });
+    return;
+  }
   const result = (await response.json().catch(() => null)) as
     | {
         status?: boolean;
@@ -272,7 +276,7 @@ const payoutDestinationHandler = async (req: Request, res: Response): Promise<vo
       encrypted_payload: encrypted.encryptedPayload,
       iv: encrypted.iv,
       auth_tag: encrypted.authTag,
-      encryption_version: 1,
+      encryption_version: encrypted.encryptionVersion,
       verified_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
@@ -318,14 +322,14 @@ router.get("/account/profile", requireAuth, async (req, res): Promise<void> => {
 });
 
 router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
-    const parsed = CreateTenancyAgreementBody.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ message: "Check the agreement details and try again." });
-      return;
-    }
-    const user = await requireUser(req, res);
-    if (!user) return;
-    const input = parsed.data;
+  const parsed = UpdateProfileBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ message: "Check the profile details and try again." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const input = parsed.data;
   const current = await loadProfile(user.id);
   const existingRole = current?.["role"] === "admin" ? "admin" : input.role;
 
@@ -362,25 +366,11 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
     verification_status: String(current?.["verification_status"] ?? "unverified"),
     updated_at: new Date().toISOString(),
   };
-    const rows = await supabaseRest<DbRow[]>("legal_docs?select=*", {
-      method: "POST",
-      body: {
-        property_id: input.propertyId,
-        created_by: user.id,
-        doc_type: "tenancy_agreement",
-        status: "draft",
-        document: {
-          tenantName: input.tenantName.trim(),
-          landlordName: input.landlordName.trim(),
-          rentNaira: input.rentNaira,
-          paymentMode: input.paymentMode,
-          premisesRulesUrl,
-          mediationClause,
-          reviewNotice,
-        },
-      },
-      prefer: "return=representation",
-    });
+  const rows = await supabaseRest<DbRow[]>("profiles?on_conflict=id&select=*", {
+    method: "POST",
+    body: values,
+    prefer: "resolution=merge-duplicates,return=representation",
+  });
 
   if (input.role === "attorney" && input.nbaSealNumber?.trim()) {
     await supabaseRest("attorneys?on_conflict=id", {

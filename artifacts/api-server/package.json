@@ -9,6 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "rotate:payout-encryption": "pnpm run build && node --enable-source-maps ./dist/rotate-payout-encryption.mjs",
     "test:payout-encryption": "node --experimental-strip-types --test ./tests/payout-encryption.test.mjs",
+    "test:payout-security": "node --experimental-strip-types --test ./tests/payout-security.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
