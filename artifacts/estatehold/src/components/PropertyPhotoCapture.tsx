@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import piexif from 'piexifjs';
+import { chooseCaptureGps, parseExifGps } from '@/lib/exifGps';
 import { Circle, MapContainer, Marker, Polyline, TileLayer, Tooltip } from 'react-leaflet';
 import { divIcon } from 'leaflet';
 
@@ -43,24 +44,25 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
   const [cameraReady, setCameraReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [locationMessage, setLocationMessage] = useState('');
+  const openingPosition = useRef<GeolocationPosition | null>(null);
   useEffect(() => { if (videoRef.current && streamRef.current) videoRef.current.srcObject = streamRef.current; }, [cameraReady]);
   useEffect(() => () => streamRef.current?.getTracks().forEach(track => track.stop()), []);
   const distance = proof && Number.isFinite(listingLatitude) && Number.isFinite(listingLongitude)
     ? distanceMeters(proof.latitude, proof.longitude, listingLatitude, listingLongitude) : null;
   const start = async () => {
-    setError('');
-    if (!Number.isFinite(listingLatitude) || !Number.isFinite(listingLongitude) || (listingLatitude === 0 && listingLongitude === 0)) {
-      setError('Enter the property latitude and longitude before taking the live photo.');
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia || !navigator.geolocation) { setError('This browser needs camera and location permission support.'); return; }
+    setError(''); setLocationMessage(''); openingPosition.current = null;
+    if (!navigator.mediaDevices?.getUserMedia) { setError('This browser does not support live camera capture.'); return; }
     setBusy(true);
     try {
+      const locationRequest = navigator.geolocation
+        ? positionOnce().then(position => { openingPosition.current = position; }).catch(() => undefined)
+        : Promise.resolve();
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-      try { await positionOnce(); } catch (error) { stream.getTracks().forEach(track => track.stop()); throw error; }
       streamRef.current = stream;
       setCameraReady(true);
-    } catch { setError('Allow camera and location access, then try again.'); }
+      void locationRequest;
+    } catch { setError('Allow camera access, then try again.'); }
     finally { setBusy(false); }
   };
   const capture = async () => {
@@ -68,28 +70,40 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
     if (!video?.videoWidth || !video.videoHeight) { setError('Camera is not ready yet.'); return; }
     setBusy(true); setError('');
     try {
-      const pos = await positionOnce();
       const canvas = document.createElement('canvas'); canvas.width = video.videoWidth; canvas.height = video.videoHeight;
       canvas.getContext('2d')?.drawImage(video, 0, 0);
       const raw = canvas.toDataURL('image/jpeg', 0.9);
+      const rawBlob = await (await fetch(raw)).blob();
+      const [exifGps, capturePosition] = await Promise.all([
+        parseExifGps(rawBlob),
+        navigator.geolocation ? positionOnce().catch(() => null) : Promise.resolve(null),
+      ]);
+      const coordinates = chooseCaptureGps(exifGps, capturePosition?.coords, openingPosition.current?.coords);
+      if (!coordinates) {
+        onProofChange(null);
+        setLocationMessage('No location found — enable Location for camera/browser or drag pin on map');
+        streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setCameraReady(false);
+        return;
+      }
       const date = new Date();
       const stamp = date.toISOString().slice(0, 19).replace(/-/g, ':').replace('T', ' ');
       const device = navigator.userAgent.slice(0, 200);
       const exif = piexif.dump({
         '0th': { 271: 'Estatehold live camera', 272: device },
         Exif: { 36867: stamp },
-        GPS: { 0: [2, 3, 0, 0], 1: pos.coords.latitude < 0 ? 'S' : 'N', 2: gpsDms(pos.coords.latitude), 3: pos.coords.longitude < 0 ? 'W' : 'E', 4: gpsDms(pos.coords.longitude), 7: gpsTime(date), 29: date.toISOString().slice(0, 10).replaceAll('-', ':') },
+        GPS: { 0: [2, 3, 0, 0], 1: coordinates.latitude < 0 ? 'S' : 'N', 2: gpsDms(coordinates.latitude), 3: coordinates.longitude < 0 ? 'W' : 'E', 4: gpsDms(coordinates.longitude), 7: gpsTime(date), 29: date.toISOString().slice(0, 10).replaceAll('-', ':') },
       });
       const withExif = piexif.insert(exif, raw);
       const blob = await (await fetch(withExif)).blob();
       const file = new File([blob], `estatehold-live-${date.getTime()}.jpg`, { type: 'image/jpeg', lastModified: date.getTime() });
-      onProofChange({ file, latitude: pos.coords.latitude, longitude: pos.coords.longitude, takenAt: date.toISOString(), device });
+      onProofChange({ file, latitude: coordinates.latitude, longitude: coordinates.longitude, takenAt: date.toISOString(), device });
+      setLocationMessage(`Auto-filled from photo location ✓ · Location captured: ${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)} ✓`);
       streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setCameraReady(false);
-    } catch { setError('Could not capture the photo and GPS metadata. Check camera and location permissions.'); }
+    } catch { setError('Could not capture the live photo. Check camera permissions and try again.'); }
     finally { setBusy(false); }
   };
   return <section className="space-y-3 rounded-2xl border border-[#dce5dd] bg-[#f7faf6] p-4 sm:col-span-2">
-    <div><h3 className="font-bold">Live property verification photo</h3><p className="mt-1 text-xs leading-5 text-[#68776d]">Camera capture and GPS/time metadata provide a verification signal, not cryptographic proof; browser-provided details can be altered. No gallery upload is accepted. Location is requested only when you start capture.</p></div>
+    <div><h3 className="font-bold">Live property verification photo</h3><p className="mt-1 text-xs leading-5 text-[#68776d]">Camera capture and GPS/time metadata provide a verification signal, not cryptographic proof; browser-provided details can be altered. No gallery upload is accepted. Camera and location are requested when you start capture.</p></div>
     {!cameraReady ? <button type="button" disabled={busy} onClick={start} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Opening camera…' : 'Take Live Photo at Location'}</button> :
       <div className="space-y-3"><video ref={videoRef} autoPlay playsInline muted className="max-h-72 w-full rounded-xl bg-black object-cover"/><button type="button" disabled={busy} onClick={capture} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Capturing…' : 'Capture live photo'}</button></div>}
     {proof && distance !== null && <div className="space-y-2">
@@ -102,6 +116,7 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
         <Polyline positions={[[listingLatitude, listingLongitude], [proof.latitude, proof.longitude]]} pathOptions={{ color: distance <= 100 ? '#15803d' : '#b42318' }}/>
       </MapContainer>
     </div>}
+    {locationMessage && <p role="status" className={`rounded-lg p-3 text-sm font-semibold ${locationMessage.startsWith('No location') ? 'bg-amber-50 text-amber-900' : 'bg-green-50 text-green-900'}`}>{locationMessage}</p>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
   </section>;
 }

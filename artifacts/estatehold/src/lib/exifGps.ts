@@ -6,6 +6,14 @@ export type ExifGps = {
   accuracyMeters: number | null;
 };
 
+export function chooseCaptureGps(
+  exifGps: { latitude: number; longitude: number } | null | undefined,
+  capturePosition: { latitude: number; longitude: number } | null | undefined,
+  openingPosition: { latitude: number; longitude: number } | null | undefined,
+): { latitude: number; longitude: number } | null {
+  return exifGps ?? capturePosition ?? openingPosition ?? null;
+}
+
 export function normalizeExifGps(
   coordinates: { latitude?: unknown; longitude?: unknown } | null | undefined,
   accuracy?: unknown,

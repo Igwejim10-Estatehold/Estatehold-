@@ -207,12 +207,21 @@ function EditPropertyForm({ property, pending, error, onSave }: {
   property: Property;
   pending: boolean;
   error: string;
-  onSave: (data: PropertyInput) => void;
+  onSave: (data: PropertyInput, proof: LivePropertyProof | null) => void;
 }) {
   const [coordinates, setCoordinates] = useState({ latitude: property.latitude || 0, longitude: property.longitude || 0 });
+  const [proof, setProof] = useState<LivePropertyProof | null>(null);
+  const [locationError, setLocationError] = useState('');
   return <form onSubmit={event => {
     event.preventDefault();
     const fd = new FormData(event.currentTarget);
+    const latitude = Number(fd.get('latitude'));
+    const longitude = Number(fd.get('longitude'));
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
+      setLocationError('Capture a live photo or click the map to set the property location.');
+      return;
+    }
+    setLocationError('');
     onSave({
       title: String(fd.get('title') || ''),
       category: String(fd.get('category')) as PropertyInput['category'],
@@ -227,11 +236,11 @@ function EditPropertyForm({ property, pending, error, onSave }: {
       bedrooms: Number(fd.get('bedrooms')) || 0,
       bathrooms: Number(fd.get('bathrooms')) || 0,
       sizeSqm: Number(fd.get('sizeSqm')) || 0,
-      latitude: Number(fd.get('latitude')),
-      longitude: Number(fd.get('longitude')),
+      latitude,
+      longitude,
       imageUrl: String(fd.get('imageUrl') || '') || undefined,
       premisesRulesUrl: property.premisesRulesUrl || undefined,
-    });
+    }, proof);
   }} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Listing title" name="title" required defaultValue={property.title}/>
@@ -249,6 +258,11 @@ function EditPropertyForm({ property, pending, error, onSave }: {
       <Field label="Image URL" name="imageUrl" type="url" defaultValue={property.imageUrl}/>
     </div>
     <PropertyLocationPicker latitude={coordinates.latitude} longitude={coordinates.longitude} onCoordinatesChange={(latitude, longitude) => setCoordinates({ latitude, longitude })}/>
+    <PropertyPhotoCapture listingLatitude={coordinates.latitude} listingLongitude={coordinates.longitude} proof={proof} onProofChange={captured => {
+      setProof(captured);
+      if (captured) setCoordinates({ latitude: captured.latitude, longitude: captured.longitude });
+    }}/>
+    {locationError && <Notice tone="red">{locationError}</Notice>}
     <TextArea label="Description" name="description" defaultValue={property.description}/>
     {error && <Notice tone="red">{error}</Notice>}
     <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save changes for review'}</Button>
@@ -411,6 +425,16 @@ function AppContent() {
   };
   const refresh = (key: readonly unknown[]) => queryClient.invalidateQueries({ queryKey: key });
   const statusMessage = (message: string) => { setNotice(message); };
+  const savePropertyProof = async (propertyId: string, proof: LivePropertyProof) => {
+    if (!authSession || !profile.data?.id || !config.data?.supabaseUrl || !config.data.supabaseAnonKey) throw new Error('Secure photo storage is unavailable.');
+    const path = `${profile.data.id}/property-verification/${propertyId}/${crypto.randomUUID()}.jpg`;
+    const storageUrl = `${config.data.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/estatehold-evidence/${path.split('/').map(encodeURIComponent).join('/')}`;
+    const upload = await fetch(storageUrl, { method: 'POST', headers: { apikey: config.data.supabaseAnonKey, Authorization: `Bearer ${authSession.access_token}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: proof.file });
+    if (!upload.ok) throw new Error('Private photo storage rejected the upload.');
+    const saved = await fetch(`/api/properties/${encodeURIComponent(propertyId)}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authSession.access_token}` }, body: JSON.stringify({ photoUrl: path, latitude: proof.latitude, longitude: proof.longitude, takenAt: proof.takenAt, device: proof.device }) });
+    const payload = await saved.json();
+    if (!saved.ok) throw new Error(payload.message || 'Photo verification could not be saved.');
+  };
   const submitAuth = async (event: FormEvent<HTMLFormElement>, mode: 'sign-in' | 'sign-up') => {
     event.preventDefault(); setAuthError('');
     const fd = new FormData(event.currentTarget); const email = String(fd.get('email') || ''); const password = String(fd.get('password') || '');
@@ -435,7 +459,7 @@ function AppContent() {
     const latitude = Number(fd.get('latitude'));
     const longitude = Number(fd.get('longitude'));
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
-      setPropertyProofError('Choose a location from a photo or click the map to drop a pin before submitting.');
+      setPropertyProofError('Take a live photo or click the map to set the property location before submitting.');
       return;
     }
     const input = {
@@ -459,17 +483,8 @@ function AppContent() {
       let proofSaved = false;
       let proofFailure = '';
       if (propertyProof) {
-        try {
-          if (!authSession || !profile.data?.id || !config.data?.supabaseUrl || !config.data.supabaseAnonKey) throw new Error('Secure photo storage is unavailable.');
-          const path = `${profile.data.id}/property-verification/${result.id}/${crypto.randomUUID()}.jpg`;
-          const storageUrl = `${config.data.supabaseUrl.replace(/\/$/, '')}/storage/v1/object/estatehold-evidence/${path.split('/').map(encodeURIComponent).join('/')}`;
-          const upload = await fetch(storageUrl, { method: 'POST', headers: { apikey: config.data.supabaseAnonKey, Authorization: `Bearer ${authSession.access_token}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: propertyProof.file });
-          if (!upload.ok) throw new Error('Private photo storage rejected the upload.');
-          const saved = await fetch(`/api/properties/${encodeURIComponent(result.id)}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authSession.access_token}` }, body: JSON.stringify({ photoUrl: path, latitude: propertyProof.latitude, longitude: propertyProof.longitude, takenAt: propertyProof.takenAt, device: propertyProof.device }) });
-          const payload = await saved.json();
-          if (!saved.ok) throw new Error(payload.message || 'Photo verification could not be saved.');
-          proofSaved = true;
-        } catch (error) { proofFailure = error instanceof Error ? error.message : 'Photo verification could not be saved.'; }
+        try { await savePropertyProof(result.id, propertyProof); proofSaved = true; }
+        catch (error) { proofFailure = error instanceof Error ? error.message : 'Photo verification could not be saved.'; }
       }
       refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getListPropertiesQueryKey({})); refresh(getGetDashboardQueryKey());
       statusMessage(proofFailure ? `Listing submitted, but its live photo was not saved: ${proofFailure}` : propertyProof && proofSaved ? 'Listing and live location photo submitted for review.' : result.hotelVerificationStatus === 'pending' ? 'Hotel submission received. It will appear in the verified directory only after admin review.' : 'Listing submitted for review.');
@@ -477,16 +492,27 @@ function AppContent() {
       navigate(result.category === 'hotel' || result.category === 'short_let' ? '/hotels' : `/property/${result.id}`);
     } });
   };
-  const submitPropertyEdit = (propertyId: string, data: PropertyInput) => {
+  const submitPropertyEdit = (propertyId: string, data: PropertyInput, proof: LivePropertyProof | null) => {
+    setPropertyProofError('');
+    if (proof && distanceMeters(proof.latitude, proof.longitude, data.latitude, data.longitude) > 100) {
+      setPropertyProofError('The live photo must be taken within 100m of the listing pin. Adjust the map pin or retake the photo.');
+      return;
+    }
     updateProperty.mutate({ propertyId, data }, {
       onSuccess: async () => {
+        let proofFailure = '';
+        if (proof) {
+          try { await savePropertyProof(propertyId, proof); }
+          catch (error) { proofFailure = error instanceof Error ? error.message : 'Photo verification could not be saved.'; }
+        }
         await Promise.all([
           refresh(getGetPropertyQueryKey(propertyId)),
           refresh(getListPropertiesQueryKey(propertyFilters)),
           refresh(getListPropertiesQueryKey({})),
           refresh(getGetDashboardQueryKey()),
         ]);
-        statusMessage('Listing changes submitted for location and property review.');
+        statusMessage(proofFailure ? `Listing changes saved, but its live photo was not saved: ${proofFailure}` : proof ? 'Listing changes and live location photo submitted for review.' : 'Listing changes submitted for location and property review.');
+        setPropertyProofError('');
         navigate(`/property/${propertyId}`);
       },
     });
@@ -616,7 +642,7 @@ function AppContent() {
       if (singleProperty.isError || !property) return <ErrorState error={singleProperty.error} onRetry={() => singleProperty.refetch()}/>;
       return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="Owner / agent workspace" title="Edit property" text="Changes return the property and location pin to review."/>
         <Notice>Saving changes resets location and moderation approval. You can use a photo’s GPS or click the map to set the updated location.</Notice>
-        <EditPropertyForm property={property} pending={updateProperty.isPending} error={updateProperty.isError ? 'Could not save changes. Check your access and listing details.' : ''} onSave={data => submitPropertyEdit(property.id, data)}/>
+        <EditPropertyForm property={property} pending={updateProperty.isPending} error={propertyProofError || (updateProperty.isError ? 'Could not save changes. Check your access and listing details.' : '')} onSave={(data, proof) => submitPropertyEdit(property.id, data, proof)}/>
       </div>;
     }
     if (propertyRoute) {
@@ -695,7 +721,7 @@ function AppContent() {
                <div className="grid gap-4 sm:grid-cols-2"><Field label="Accommodation name" name="title" required/><SelectField label="Type" name="category" options={[['hotel','Hotel'],['short_let','Short-let']]}/><Field label="CAC registration number" name="hotelCacNumber" required/><Field label="Public reception / emergency contact" name="emergencyContactPhone" type="tel" required placeholder="+234…"/><Field label="State" name="state" required/><Field label="City / town" name="town" required/><Field label="Street address" name="address" required/><Field label="Price (₦)" name="priceNaira" type="number" min={1} required/><Field label="Price unit" name="priceUnit" defaultValue="per night"/><Field label="Guest terms / house rules URL" name="premisesRulesUrl" type="url" required placeholder="https://…"/></div>
                <PropertyLocationPicker latitude={listingCoordinates.latitude} longitude={listingCoordinates.longitude} onCoordinatesChange={(latitude, longitude) => setListingCoordinates({ latitude, longitude })}/>
               <div className="space-y-3 rounded-xl bg-[#f7f9f5] p-4 text-sm"><label className="flex gap-2"><input type="checkbox" name="hotelHas24HourReception" className="mt-1 accent-[#16A34A]"/>24-hour reception is available</label><label className="flex gap-2"><input type="checkbox" name="hotelCctvCommonAreas" className="mt-1 accent-[#16A34A]"/>CCTV is used in common areas</label><label className="flex gap-2"><input type="checkbox" name="hotelSafetyCheckinAvailable" className="mt-1 accent-[#16A34A]"/>Offer voluntary safety check-in by SMS</label><label className="flex gap-2 font-semibold"><input type="checkbox" name="hotelCctvDisclosed" required className="mt-1 accent-[#16A34A]"/>I confirm there is no monitoring inside guest rooms and any CCTV is disclosed and limited to common areas.</label></div>
-               <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
+                <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={proof => { setPropertyProof(proof); if (proof) setListingCoordinates({ latitude: proof.latitude, longitude: proof.longitude }); }}/>
                {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
               <TextArea label="Accommodation details" name="description" placeholder="Share information guests need before booking."/>
               {createProperty.isError && <Notice tone="red">Could not submit. Sign in with an owner/agent account and check the required listing details.</Notice>}
@@ -729,7 +755,7 @@ function AppContent() {
               <Field label="Custom property type (optional)" name="customType" placeholder="Describe the type"/><SelectField label="Listing intent" name="intent" options={[['sale','For sale'],['rent','For rent'],['lease','For lease'],['social','Shared housing']]} />
                <Field label="State" name="state" required placeholder="Lagos"/><Field label="Town / city" name="town" required placeholder="Ikeja"/><Field label="Street address" name="address" placeholder="Street, estate or landmark"/><Field label="Price in naira" name="priceNaira" type="number" min={1} required placeholder="0"/><Field label="Price unit" name="priceUnit" placeholder="per year, total…"/><Field label="Bedrooms" name="bedrooms" type="number" min={0}/><Field label="Bathrooms" name="bathrooms" type="number" min={0}/><Field label="Size (m²)" name="sizeSqm" type="number" min={0}/><Field label="Image URL (optional)" name="imageUrl" placeholder="https://…"/><Field label="Premises rules URL (optional)" name="premisesRulesUrl" placeholder="https://…"/></div>
             <PropertyLocationPicker latitude={listingCoordinates.latitude} longitude={listingCoordinates.longitude} onCoordinatesChange={(latitude, longitude) => setListingCoordinates({ latitude, longitude })}/>
-            <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
+             <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={proof => { setPropertyProof(proof); if (proof) setListingCoordinates({ latitude: proof.latitude, longitude: proof.longitude }); }}/>
             {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
             <TextArea label="Description" name="description" placeholder="Share the details a renter or buyer should know."/>
             {createProperty.isError && <Notice tone="red">The listing could not be submitted. Please review the fields and try again.</Notice>}

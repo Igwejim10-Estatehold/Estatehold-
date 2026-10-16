@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { findFirstPhotoWithGps, normalizeExifGps, parseExifGps } from './exifGps';
+import { chooseCaptureGps, findFirstPhotoWithGps, normalizeExifGps, parseExifGps } from './exifGps';
 
 describe('EXIF GPS parsing helpers', () => {
+  it('prefers EXIF coordinates over browser GPS and uses browser GPS as fallback', () => {
+    const exif = { latitude: 6.1, longitude: 7.2 };
+    const browser = { latitude: 6.3, longitude: 7.4 };
+    assert.deepEqual(chooseCaptureGps(exif, browser, null), exif);
+    assert.deepEqual(chooseCaptureGps(null, browser, null), browser);
+    assert.equal(chooseCaptureGps(null, null, null), null);
+  });
   it('accepts valid coordinates and reported horizontal accuracy', () => {
     assert.deepEqual(normalizeExifGps({ latitude: 6.48, longitude: 7.55 }, 8.4), {
       latitude: 6.48,
