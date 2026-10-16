@@ -7,6 +7,8 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
+    "rotate:payout-encryption": "pnpm run build && node --enable-source-maps ./dist/rotate-payout-encryption.mjs",
+    "test:payout-encryption": "node --experimental-strip-types --test ./tests/payout-encryption.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

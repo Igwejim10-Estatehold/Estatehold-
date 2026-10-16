@@ -20,9 +20,7 @@ export async function loadVerifiedPayoutDestination(
   const rows = await supabaseRest<DbRow[]>(`payout_destinations?${query}`);
   const row = rows[0];
   if (!row || !row["verified_at"]) return null;
-  if (Number(row["encryption_version"]) !== 1) {
-    throw new Error("Unsupported payout encryption version.");
-  }
+  const encryptionVersion = Number(row["encryption_version"]);
 
   let details: Record<string, unknown>;
   try {
@@ -31,6 +29,7 @@ export async function loadVerifiedPayoutDestination(
         String(row["encrypted_payload"]),
         String(row["iv"]),
         String(row["auth_tag"]),
+        encryptionVersion,
       ),
     ) as Record<string, unknown>;
   } catch {

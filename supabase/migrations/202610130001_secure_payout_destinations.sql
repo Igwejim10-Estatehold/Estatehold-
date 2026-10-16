@@ -5,7 +5,7 @@ create table if not exists public.payout_destinations (
   encrypted_payload text not null,
   iv text not null,
   auth_tag text not null,
-  encryption_version integer not null default 1 check (encryption_version = 1),
+  encryption_version integer not null default 2 check (encryption_version >= 1),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
