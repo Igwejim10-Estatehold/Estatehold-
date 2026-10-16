@@ -376,6 +376,17 @@ export const CreatePropertyPhotoResponse = zod.object({
 
 
 /**
+ * @summary Serve a private property verification photo to its owner or an administrator
+ */
+export const GetPropertyVerificationPhotoParams = zod.object({
+  "propertyId": zod.coerce.string(),
+  "photoId": zod.coerce.string()
+})
+
+export const GetPropertyVerificationPhotoResponse = zod.unknown()
+
+
+/**
  * @summary Create a property transaction and place a delisting lock
  */
 export const createTransactionBodyInstallmentCountMin = 2;
@@ -886,6 +897,44 @@ export const GetAdminDashboardResponse = zod.object({
   "heldEscrows": zod.number().int(),
   "openRequests": zod.number().int(),
   "attorneyReviews": zod.number().int()
+})
+
+
+/**
+ * @summary List pending properties with their location verification evidence
+ */
+export const ListAdminPropertyQueueResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "category": zod.string(),
+  "state": zod.string(),
+  "town": zod.string(),
+  "verificationPhoto": zod.union([zod.object({
+  "id": zod.string(),
+  "latitude": zod.number(),
+  "longitude": zod.number(),
+  "takenAt": zod.coerce.date(),
+  "device": zod.string(),
+  "distanceMeters": zod.number()
+}),zod.null()])
+}))
+})
+
+
+/**
+ * @summary Approve or reject a pending property after reviewing its evidence
+ */
+export const ReviewAdminPropertyParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const ReviewAdminPropertyBody = zod.object({
+  "decision": zod.enum(['approved', 'rejected'])
+})
+
+export const ReviewAdminPropertyResponse = zod.object({
+  "status": zod.string()
 })
 
 

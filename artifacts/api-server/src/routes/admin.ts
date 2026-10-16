@@ -6,6 +6,7 @@ import {
   ListAdminKycQueueResponse,
   ListAdminLandlordKycQueueResponse,
   GetAdminDashboardResponse,
+  ListAdminPropertyQueueResponse,
   ReleaseEscrowParams,
   ReviewHotelVerificationBody,
   ReviewHotelVerificationParams,
@@ -27,6 +28,29 @@ import { type DbRow } from "../lib/estatehold";
 import { supabaseRest, supabaseRpc } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+function toFiniteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function gpsDistanceMeters(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number,
+  longitudeB: number,
+): number {
+  const radians = Math.PI / 180;
+  const deltaLatitude = (latitudeB - latitudeA) * radians;
+  const deltaLongitude = (longitudeB - longitudeA) * radians;
+  const a =
+    Math.sin(deltaLatitude / 2) ** 2 +
+    Math.cos(latitudeA * radians) *
+      Math.cos(latitudeB * radians) *
+      Math.sin(deltaLongitude / 2) ** 2;
+  return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 router.post("/admin/set-role", requireAuth, async (req, res): Promise<void> => {
   if (!(await requireRoles(req, res, ["owner"]))) return;
@@ -594,6 +618,69 @@ router.get("/admin/workspace-data", requireAuth, async (req, res): Promise<void>
   });
 });
 
+router.get("/admin/queues/properties", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const properties = await supabaseRest<DbRow[]>(
+    "properties?select=id,title,category,state,town,gps_lat,gps_lng,owner_id&listing_moderation_status=eq.pending&order=created_at.asc&limit=500",
+  );
+  const propertyIds = properties
+    .map((row) => String(row["id"] ?? ""))
+    .filter((id) => id.length > 0);
+  const photos = propertyIds.length
+    ? await supabaseRest<DbRow[]>(
+        `property_photos?select=id,property_id,photo_url,lat,lng,taken_at,device&property_id=in.(${propertyIds.join(",")})&order=taken_at.desc&limit=1000`,
+      )
+    : [];
+  const latestPhotoByProperty = new Map<string, DbRow>();
+  for (const photo of photos) {
+    const propertyId = String(photo["property_id"] ?? "");
+    if (propertyId && !latestPhotoByProperty.has(propertyId)) {
+      latestPhotoByProperty.set(propertyId, photo);
+    }
+  }
+
+  const items = properties.map((property) => {
+    const propertyId = String(property["id"]);
+    const photo = latestPhotoByProperty.get(propertyId);
+    const listingLatitude = toFiniteNumber(property["gps_lat"]);
+    const listingLongitude = toFiniteNumber(property["gps_lng"]);
+    const photoLatitude = toFiniteNumber(photo?.["lat"]);
+    const photoLongitude = toFiniteNumber(photo?.["lng"]);
+    const storedPhotoPath = typeof photo?.["photo_url"] === "string" ? photo["photo_url"] : "";
+    const photoBelongsToProperty =
+      !!photo &&
+      storedPhotoPath.startsWith(`${String(property["owner_id"] ?? "")}/property-verification/${propertyId}/`) &&
+      storedPhotoPath.endsWith(".jpg");
+    const distance =
+      photoBelongsToProperty &&
+      listingLatitude !== null &&
+      listingLongitude !== null &&
+      photoLatitude !== null &&
+      photoLongitude !== null
+        ? gpsDistanceMeters(listingLatitude, listingLongitude, photoLatitude, photoLongitude)
+        : null;
+    return {
+      id: propertyId,
+      title: String(property["title"] ?? "Untitled property"),
+      category: String(property["category"] ?? ""),
+      state: String(property["state"] ?? ""),
+      town: String(property["town"] ?? ""),
+      verificationPhoto:
+        photo && photoBelongsToProperty && photoLatitude !== null && photoLongitude !== null && distance !== null
+          ? {
+              id: String(photo["id"]),
+              latitude: photoLatitude,
+              longitude: photoLongitude,
+              takenAt: String(photo["taken_at"]),
+              device: String(photo["device"] ?? "Unknown device"),
+              distanceMeters: distance,
+            }
+          : null,
+    };
+  });
+  res.json(ListAdminPropertyQueueResponse.parse({ items }));
+});
+
 router.post("/admin/properties/:propertyId/review", requireAuth, async (req, res): Promise<void> => {
   if (!(await requireRoles(req, res, ["admin"]))) return;
   const propertyId = typeof req.params.propertyId === "string" ? req.params.propertyId : "";
@@ -612,6 +699,15 @@ router.post("/admin/properties/:propertyId/review", requireAuth, async (req, res
   if (current[0]["listing_moderation_status"] !== "pending") {
     res.status(409).json({ message: "This property has already been reviewed." });
     return;
+  }
+  if (decision === "approved") {
+    const evidence = await supabaseRest<DbRow[]>(
+      `property_photos?property_id=eq.${encodeURIComponent(propertyId)}&select=id&limit=1`,
+    );
+    if (!evidence.length) {
+      res.status(409).json({ message: "A location verification photo must be available before this property can be approved." });
+      return;
+    }
   }
   await supabaseRest(`properties?id=eq.${encodeURIComponent(propertyId)}`, {
     method: "PATCH",

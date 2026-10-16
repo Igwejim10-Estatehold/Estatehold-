@@ -26,6 +26,8 @@ import type {
   AdminHotelVerificationQueue,
   AdminKycQueue,
   AdminLandlordKycQueue,
+  AdminPropertyQueue,
+  AdminPropertyReviewInput,
   Agreement,
   AgreementInput,
   Complaint,
@@ -825,6 +827,88 @@ export const useCreatePropertyPhoto = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreatePropertyPhotoMutationOptions(options));
     }
+
+export const getGetPropertyVerificationPhotoUrl = (propertyId: string,
+    photoId: string,) => {
+
+
+
+
+  return `/api/properties/${propertyId}/photos/${photoId}/image`
+}
+
+/**
+ * @summary Serve a private property verification photo to its owner or an administrator
+ */
+export const getPropertyVerificationPhoto = async (propertyId: string,
+    photoId: string, options?: Parameters<typeof customFetch>[1]): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetPropertyVerificationPhotoUrl(propertyId,photoId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPropertyVerificationPhotoQueryKey = (propertyId: string,
+    photoId: string,) => {
+    return [
+    `/api/properties/${propertyId}/photos/${photoId}/image`
+    ] as const;
+    }
+
+
+export const getGetPropertyVerificationPhotoQueryOptions = <TData = Awaited<ReturnType<typeof getPropertyVerificationPhoto>>, TError = ErrorType<void>>(propertyId: string,
+    photoId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPropertyVerificationPhoto>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPropertyVerificationPhotoQueryKey(propertyId,photoId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPropertyVerificationPhoto>>> = ({ signal }) => getPropertyVerificationPhoto(propertyId,photoId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: propertyId !== null && propertyId !== undefined && photoId !== null && photoId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPropertyVerificationPhoto>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPropertyVerificationPhotoQueryResult = NonNullable<Awaited<ReturnType<typeof getPropertyVerificationPhoto>>>
+export type GetPropertyVerificationPhotoQueryError = ErrorType<void>
+
+
+/**
+ * @summary Serve a private property verification photo to its owner or an administrator
+ */
+
+export function useGetPropertyVerificationPhoto<TData = Awaited<ReturnType<typeof getPropertyVerificationPhoto>>, TError = ErrorType<void>>(
+ propertyId: string,
+    photoId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPropertyVerificationPhoto>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPropertyVerificationPhotoQueryOptions(propertyId,photoId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreateTransactionUrl = () => {
 
@@ -2736,6 +2820,172 @@ export function useGetAdminDashboard<TData = Awaited<ReturnType<typeof getAdminD
 
 
 
+
+export const getListAdminPropertyQueueUrl = () => {
+
+
+
+
+  return `/api/admin/queues/properties`
+}
+
+/**
+ * @summary List pending properties with their location verification evidence
+ */
+export const listAdminPropertyQueue = async ( options?: Parameters<typeof customFetch>[1]): Promise<AdminPropertyQueue> => {
+
+  return customFetch<AdminPropertyQueue>(getListAdminPropertyQueueUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminPropertyQueueQueryKey = () => {
+    return [
+    `/api/admin/queues/properties`
+    ] as const;
+    }
+
+
+export const getListAdminPropertyQueueQueryOptions = <TData = Awaited<ReturnType<typeof listAdminPropertyQueue>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPropertyQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminPropertyQueueQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminPropertyQueue>>> = ({ signal }) => listAdminPropertyQueue({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminPropertyQueue>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminPropertyQueueQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminPropertyQueue>>>
+export type ListAdminPropertyQueueQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List pending properties with their location verification evidence
+ */
+
+export function useListAdminPropertyQueue<TData = Awaited<ReturnType<typeof listAdminPropertyQueue>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminPropertyQueue>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminPropertyQueueQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getReviewAdminPropertyUrl = (propertyId: string,) => {
+
+
+
+
+  return `/api/admin/properties/${propertyId}/review`
+}
+
+/**
+ * @summary Approve or reject a pending property after reviewing its evidence
+ */
+export const reviewAdminProperty = async (propertyId: string,
+    adminPropertyReviewInput: AdminPropertyReviewInput, options?: Parameters<typeof customFetch>[1]): Promise<StatusResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<StatusResult>(getReviewAdminPropertyUrl(propertyId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(adminPropertyReviewInput)
+  }
+);}
+
+
+
+
+
+export const getReviewAdminPropertyMutationKey = () => ['reviewAdminProperty'] as const;
+
+export const getReviewAdminPropertyMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminProperty>>, TError,ReviewAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reviewAdminProperty>>, TError,ReviewAdminPropertyMutationVariables, TContext> => {
+
+const mutationKey = getReviewAdminPropertyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reviewAdminProperty>>, ReviewAdminPropertyMutationVariables> = (props) => {
+          const {propertyId,data} = props ?? {};
+
+          return  reviewAdminProperty(propertyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReviewAdminPropertyMutationResult = NonNullable<Awaited<ReturnType<typeof reviewAdminProperty>>>
+    export type ReviewAdminPropertyMutationBody = BodyType<AdminPropertyReviewInput>
+    export type ReviewAdminPropertyMutationError = ErrorType<Error>
+    export type ReviewAdminPropertyMutationVariables = {propertyId: string;data: BodyType<AdminPropertyReviewInput>}
+
+    /**
+ * @summary Approve or reject a pending property after reviewing its evidence
+ */
+export const useReviewAdminProperty = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reviewAdminProperty>>, TError,ReviewAdminPropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reviewAdminProperty>>,
+        TError,
+        ReviewAdminPropertyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getReviewAdminPropertyMutationOptions(options));
+    }
 
 export const getListAdminDelistingQueueUrl = () => {
 

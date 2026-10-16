@@ -859,6 +859,40 @@ export interface AdminDashboard {
   attorneyReviews: number;
 }
 
+export interface AdminPropertyVerificationPhoto {
+  id: string;
+  latitude: number;
+  longitude: number;
+  takenAt: string;
+  device: string;
+  distanceMeters: number;
+}
+
+export type AdminPropertyQueueItemsItem = {
+  id: string;
+  title: string;
+  category: string;
+  state: string;
+  town: string;
+  verificationPhoto: AdminPropertyVerificationPhoto | null;
+};
+
+export interface AdminPropertyQueue {
+  items: AdminPropertyQueueItemsItem[];
+}
+
+export type AdminPropertyReviewInputDecision = typeof AdminPropertyReviewInputDecision[keyof typeof AdminPropertyReviewInputDecision];
+
+
+export const AdminPropertyReviewInputDecision = {
+  approved: 'approved',
+  rejected: 'rejected',
+} as const;
+
+export interface AdminPropertyReviewInput {
+  decision: AdminPropertyReviewInputDecision;
+}
+
 export type AdminDelistingQueueItemsItem = {
   id: string;
   propertyId: string;

@@ -181,6 +181,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PropertyPhoto"
+  /properties/{propertyId}/photos/{photoId}/image:
+    get:
+      operationId: getPropertyVerificationPhoto
+      tags: [marketplace]
+      summary: Serve a private property verification photo to its owner or an administrator
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+        - in: path
+          name: photoId
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Private verification image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Sign-in required
+        "403":
+          description: Only the property owner or an administrator may view this image
+        "404":
+          description: Photo not found
   /transactions:
     post:
       operationId: createTransaction
@@ -663,6 +690,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminDashboard"
+  /admin/queues/properties:
+    get:
+      operationId: listAdminPropertyQueue
+      tags: [admin]
+      summary: List pending properties with their location verification evidence
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Pending property moderation queue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminPropertyQueue"
+  /admin/properties/{propertyId}/review:
+    post:
+      operationId: reviewAdminProperty
+      tags: [admin]
+      summary: Approve or reject a pending property after reviewing its evidence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminPropertyReviewInput"
+      responses:
+        "200":
+          description: Property review decision saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResult"
+        "409":
+          description: Property is no longer pending or has no available location photo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/queues/delistings:
     get:
       operationId: listAdminDelistingQueue
@@ -1365,6 +1434,40 @@ components:
         heldEscrows: { type: integer }
         openRequests: { type: integer }
         attorneyReviews: { type: integer }
+    AdminPropertyQueue:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [id, title, category, state, town, verificationPhoto]
+            properties:
+              id: { type: string }
+              title: { type: string }
+              category: { type: string }
+              state: { type: string }
+              town: { type: string }
+              verificationPhoto:
+                anyOf:
+                  - $ref: "#/components/schemas/AdminPropertyVerificationPhoto"
+                  - type: "null"
+    AdminPropertyVerificationPhoto:
+      type: object
+      required: [id, latitude, longitude, takenAt, device, distanceMeters]
+      properties:
+        id: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        takenAt: { type: string, format: date-time }
+        device: { type: string }
+        distanceMeters: { type: number }
+    AdminPropertyReviewInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approved, rejected] }
     AdminDelistingQueue:
       type: object
       required: [items]

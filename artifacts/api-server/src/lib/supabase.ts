@@ -48,6 +48,21 @@ export function getServiceRoleKey(): string {
   return requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
 
+export async function fetchPrivatePropertyPhoto(path: string): Promise<globalThis.Response> {
+  const encodedPath = path.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `${getSupabaseUrl()}/storage/v1/object/estatehold-evidence/${encodedPath}`,
+    {
+      headers: {
+        apikey: getServiceRoleKey(),
+        Authorization: `Bearer ${getServiceRoleKey()}`,
+      },
+      signal: AbortSignal.timeout(8000),
+    },
+  );
+  return response;
+}
+
 export function getPublicConfig() {
   let supabaseUrl = "";
   try {

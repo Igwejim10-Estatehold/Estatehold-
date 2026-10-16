@@ -23,7 +23,7 @@ import {
   type DbProperty,
   type DbRow,
 } from "../lib/estatehold";
-import { getPublicConfig, SupabaseRequestError, supabaseRest } from "../lib/supabase";
+import { fetchPrivatePropertyPhoto, getPublicConfig, SupabaseRequestError, supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
 
@@ -265,6 +265,82 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
     takenAt: new Date(takenAt).toISOString(), takenBy: user.id, device: parsed.data.device, distanceMeters, within100m: true,
   }));
 });
+
+router.get(
+  "/properties/:propertyId/photos/:photoId/image",
+  requireAuth,
+  async (req, res): Promise<void> => {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const propertyId = typeof req.params.propertyId === "string" ? req.params.propertyId : "";
+    const photoId = typeof req.params.photoId === "string" ? req.params.photoId : "";
+    if (!propertyId || !photoId) {
+      res.status(400).json({ message: "A valid property and photo are required." });
+      return;
+    }
+
+    const photos = await supabaseRest<DbRow[]>(
+      `property_photos?id=eq.${encodeURIComponent(photoId)}&property_id=eq.${encodeURIComponent(propertyId)}&select=id,photo_url,taken_by&limit=1`,
+    );
+    const photo = photos[0];
+    if (!photo) {
+      res.status(404).json({ message: "Verification photo not found." });
+      return;
+    }
+
+    const properties = await supabaseRest<DbRow[]>(
+      `properties?id=eq.${encodeURIComponent(propertyId)}&select=id,owner_id&limit=1`,
+    );
+    const property = properties[0];
+    if (!property) {
+      res.status(404).json({ message: "Property not found." });
+      return;
+    }
+    const isOwner = property["owner_id"] === user.id;
+    const isAdmin = !isOwner && (await getUserRole(user.id)) === "admin";
+    if (!isOwner && !isAdmin) {
+      res.status(403).json({ message: "Only the property owner or an administrator may view this photo." });
+      return;
+    }
+
+    const photoPath = typeof photo["photo_url"] === "string" ? photo["photo_url"] : "";
+    const ownerId = String(property["owner_id"] ?? "");
+    if (
+      photo["taken_by"] !== ownerId ||
+      !photoPath.startsWith(`${ownerId}/property-verification/${propertyId}/`) ||
+      !photoPath.endsWith(".jpg")
+    ) {
+      res.status(404).json({ message: "Verification photo not found." });
+      return;
+    }
+
+    let storedPhoto: globalThis.Response;
+    try {
+      storedPhoto = await fetchPrivatePropertyPhoto(photoPath);
+    } catch {
+      res.status(503).json({ message: "The private verification image is temporarily unavailable." });
+      return;
+    }
+    if (!storedPhoto.ok) {
+      res.status(storedPhoto.status === 404 ? 404 : 503).json({
+        message: storedPhoto.status === 404
+          ? "Verification photo not found."
+          : "The private verification image is temporarily unavailable.",
+      });
+      return;
+    }
+    const contentType = storedPhoto.headers.get("content-type") ?? "";
+    if (contentType !== "image/jpeg") {
+      res.status(415).json({ message: "The stored verification file is not a JPEG image." });
+      return;
+    }
+    const image = Buffer.from(await storedPhoto.arrayBuffer());
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.send(image);
+  },
+);
 
 router.get("/properties/:propertyId", async (req, res): Promise<void> => {
   const parsed = GetPropertyParams.safeParse(req.params);

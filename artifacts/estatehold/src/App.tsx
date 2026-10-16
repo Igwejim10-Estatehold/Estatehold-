@@ -8,12 +8,12 @@ import { setAuthTokenGetter } from '@workspace/api-client-react';
 import {
   getGetAdminDashboardQueryKey, getGetDashboardQueryKey, getGetProfileQueryKey, getGetPublicConfigQueryKey,
   getGetPropertyQueryKey, getGetProcessingFeeScheduleQueryKey, getHealthCheckQueryKey, getListComplaintsQueryKey, getListPropertiesQueryKey,
-  getListAdminKycQueueQueryKey, getListAdminHotelVerificationQueueQueryKey, getListSocialHousingUnitsQueryKey,
+  getListAdminKycQueueQueryKey, getListAdminHotelVerificationQueueQueryKey, getListAdminPropertyQueueQueryKey, getListSocialHousingUnitsQueryKey,
   getListAdminLandlordKycQueueQueryKey,
   useGetProcessingFeeSchedule,
   getListSpecialRequestsQueryKey, useListAdminKycQueue, useListAdminHotelVerificationQueue, useReviewKyc,
   useReviewHotelVerification, useCalculateFees, useCalculateInstallments,
-  useListAdminLandlordKycQueue, useReviewLandlordKyc,
+  useListAdminLandlordKycQueue, useListAdminPropertyQueue, useReviewLandlordKyc,
   useCreateComplaint, useCreateProperty, useCreateSpecialRequest, useCreateTenancyAgreement, useGetAdminDashboard,
   getGetPayoutBanksQueryKey, getGetPayoutDestinationQueryKey, useGetPayoutBanks, useGetPayoutDestination,
   useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
@@ -35,7 +35,7 @@ import AdminMockDashboard from '@/pages/AdminMockDashboard';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
 
 const queryClient = new QueryClient();
-const ADMIN_MOCK_MODE = true;
+const ADMIN_MOCK_MODE = import.meta.env.DEV && import.meta.env.VITE_ADMIN_MOCK_MODE === 'true';
 const routes = [
   ['/hotels', 'Hotels & short-lets', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
   ['/agent-dashboard', 'Agent dashboard', Activity],
@@ -98,6 +98,92 @@ function EmptyState({ icon: Icon = Home, title, body, action }: { icon?: typeof 
 function Notice({ children, tone = 'green' }: { children: ReactNode; tone?: 'green' | 'amber' | 'red' }) {
   const color = tone === 'amber' ? 'border-[#ebd9af] bg-[#fff9e9] text-[#755d21]' : tone === 'red' ? 'border-[#f0d2cf] bg-[#fff8f6] text-[#853b32]' : 'border-[#cae7d0] bg-[#f1faf2] text-[#27643b]';
   return <div className={`flex gap-3 rounded-2xl border p-4 text-sm leading-6 ${color}`}><ShieldCheck className="mt-0.5 shrink-0" size={18}/><div>{children}</div></div>;
+}
+type AdminPropertyReview = {
+  id: string;
+  title: string;
+  category: string;
+  state: string;
+  town: string;
+  verificationPhoto?: {
+    id: string;
+    latitude: number;
+    longitude: number;
+    takenAt: string;
+    device: string;
+    distanceMeters: number;
+  } | null;
+};
+function AdminPropertyReviewCard({ property, accessToken, onDecision }: {
+  property: AdminPropertyReview;
+  accessToken: string;
+  onDecision: (propertyId: string, decision: 'approved' | 'rejected') => void;
+}) {
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoLoading, setPhotoLoading] = useState(Boolean(property.verificationPhoto));
+  const [photoError, setPhotoError] = useState('');
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    const photo = property.verificationPhoto;
+    if (!photo) {
+      setPhotoUrl('');
+      setPhotoLoading(false);
+      setPhotoError('');
+      return;
+    }
+    let active = true;
+    let objectUrl = '';
+    setPhotoLoading(true);
+    setPhotoError('');
+    fetch(`/api/properties/${encodeURIComponent(property.id)}/photos/${encodeURIComponent(photo.id)}/image`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+      .then(async response => {
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.message || 'The private verification photo could not be loaded.');
+        }
+        return response.blob();
+      })
+      .then(blob => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setPhotoUrl(objectUrl);
+      })
+      .catch(error => {
+        if (active) setPhotoError(error instanceof Error ? error.message : 'The private verification photo could not be loaded.');
+      })
+      .finally(() => { if (active) setPhotoLoading(false); });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [accessToken, property.id, property.verificationPhoto?.id, retry]);
+
+  const canApprove = Boolean(property.verificationPhoto && photoUrl && !photoLoading && !photoError);
+  return <article className="rounded-2xl border border-[#e4eae3] bg-white p-4 sm:p-5">
+    <div className="grid gap-4 lg:grid-cols-[minmax(240px,.9fr)_1.1fr]">
+      <div>
+        {property.verificationPhoto ? photoLoading ? <div className="grid h-56 place-items-center rounded-xl bg-[#f3f6f1] text-sm text-[#718077]">Loading private location photo…</div> : photoError ? <div className="grid h-56 place-items-center rounded-xl border border-[#f0d2cf] bg-[#fff8f6] p-5 text-center text-sm text-[#853b32]"><div>{photoError}<button onClick={() => setRetry(value => value + 1)} className="mt-2 block w-full font-bold underline">Retry photo</button></div></div> : <img src={photoUrl} alt={`Location verification for ${property.title}`} className="h-56 w-full rounded-xl bg-[#f3f6f1] object-cover"/> : <div className="grid h-56 place-items-center rounded-xl border border-dashed border-[#e3c9a0] bg-[#fff9ec] p-5 text-center text-sm text-[#765d2d]">No location verification photo is attached. This listing cannot be approved until its evidence is available.</div>}
+        {property.verificationPhoto && <p className="mt-2 text-xs text-[#718077]">Private location evidence · visible only to this listing’s owner and administrators</p>}
+      </div>
+      <div className="flex flex-col">
+        <p className="text-xs font-bold uppercase tracking-[.12em] text-[#65806a]">Pending property review</p>
+        <h3 className="mt-1 font-display text-xl font-extrabold">{property.title || 'Untitled property'}</h3>
+        <p className="mt-1 text-sm text-[#718077]">{property.category} · {property.town}, {property.state}</p>
+        {property.verificationPhoto ? <dl className="mt-4 grid gap-3 rounded-xl bg-[#f7f9f5] p-4 text-sm sm:grid-cols-2">
+          <div><dt className="text-xs font-semibold text-[#718077]">Photo captured</dt><dd className="mt-1 font-semibold">{new Date(property.verificationPhoto.takenAt).toLocaleString()}</dd></div>
+          <div><dt className="text-xs font-semibold text-[#718077]">Device</dt><dd className="mt-1 font-semibold">{property.verificationPhoto.device}</dd></div>
+          <div><dt className="text-xs font-semibold text-[#718077]">GPS distance from listing pin</dt><dd className={`mt-1 font-bold ${property.verificationPhoto.distanceMeters <= 100 ? 'text-[#18783a]' : 'text-[#a43b32]'}`}>{Math.round(property.verificationPhoto.distanceMeters)} m {property.verificationPhoto.distanceMeters <= 100 ? 'from pin' : 'from pin · over 100 m'}</dd></div>
+          <div><dt className="text-xs font-semibold text-[#718077]">Captured coordinates</dt><dd className="mt-1 font-mono text-xs">{property.verificationPhoto.latitude.toFixed(6)}, {property.verificationPhoto.longitude.toFixed(6)}</dd></div>
+        </dl> : <p className="mt-4 rounded-xl bg-[#fff9ec] p-4 text-sm leading-6 text-[#765d2d]">Without a saved photo there is no location evidence to inspect. Reject the submission or ask the owner to resubmit evidence.</p>}
+        <div className="mt-auto flex flex-wrap gap-2 pt-4">
+          <Button onClick={() => onDecision(property.id, 'approved')} disabled={!canApprove}>Approve</Button>
+          <Button variant="danger" onClick={() => onDecision(property.id, 'rejected')}>Reject</Button>
+        </div>
+      </div>
+    </div>
+  </article>;
 }
 function PropertyCard({ property }: { property: Property }) {
   return <Link href={`/property/${property.id}`} className="group overflow-hidden rounded-2xl border border-[#e4eae3] bg-white transition-transform hover:-translate-y-1 hover:shadow-lg hover:shadow-[#1d3523]/[.06]" data-testid={`card-property-${property.id}`}>
@@ -183,6 +269,7 @@ function AppContent() {
   const landlordKycQueue = useListAdminLandlordKycQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin' && adminWorkspaceTab === 'Landlord KYC', queryKey: getListAdminLandlordKycQueueQueryKey(), retry: false } });
   const reviewLandlordKyc = useReviewLandlordKyc();
   const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
+  const propertyReviewQueue = useListAdminPropertyQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin' && adminWorkspaceTab === 'Properties', queryKey: getListAdminPropertyQueueQueryKey(), retry: false } });
   const singleProperty = useGetProperty(propertyRouteParams?.id || '', { query: { enabled: !!propertyRoute && !!propertyRouteParams?.id, queryKey: getGetPropertyQueryKey(propertyRouteParams?.id || '') } });
   const createProperty = useCreateProperty();
   const createRequest = useCreateSpecialRequest();
@@ -413,6 +500,7 @@ function AppContent() {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload?.message || 'Property review did not complete.');
       setAdminWorkspaceReload(v => v + 1);
+      refresh(getListAdminPropertyQueueQueryKey());
       refresh(getListPropertiesQueryKey({}));
       statusMessage(decision === 'approved' ? 'Property approved.' : 'Property rejected.');
     } catch (error) { statusMessage(error instanceof Error ? error.message : 'Property review did not complete.'); }
@@ -607,7 +695,7 @@ function AppContent() {
                {adminWorkspaceLoading ? <LoadingCard/> : adminWorkspaceError ? <Notice tone="red">{adminWorkspaceError}</Notice> : !adminWorkspace ? <p className="text-sm text-[#718077]">Admin data is unavailable.</p> :
                  adminWorkspaceTab==='Landlord KYC' ? landlordKycQueue.isLoading ? <LoadingCard/> : landlordKycQueue.isError ? <ErrorState onRetry={()=>landlordKycQueue.refetch()} error={landlordKycQueue.error}/> : landlordKycQueue.data?.items.length ? <div className="divide-y divide-[#edf1ec]">{landlordKycQueue.data.items.map(item=><div key={item.userId} className="py-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><b className="text-sm">{item.fullName}</b><p className="mt-1 text-xs text-[#718077]">NIN {item.maskedNin||'not available'} · {item.ninVerified?'Verified':'Not verified'} · Indemnity {item.indemnitySigned?'signed':'not signed'}</p><p className="mt-1 text-xs text-[#718077]">Review: {item.reviewStatus} · Submitted {new Date(item.createdAt).toLocaleDateString()}</p></div><div className="flex flex-wrap gap-2">{item.propertyDocUrl&&<Button variant="outline" onClick={()=>openKycDocument(item.propertyDocUrl!)}>View property document</Button>}{item.affidavitUrl&&<Button variant="outline" onClick={()=>openKycDocument(item.affidavitUrl!)}>View affidavit</Button>}</div></div><div className="mt-3 flex gap-2"><Button onClick={()=>reviewLandlordKyc.mutate({userId:item.userId,data:{decision:'approved'}},{onSuccess:()=>{refresh(getListAdminLandlordKycQueueQueryKey());statusMessage('Landlord KYC approved.');}})} disabled={reviewLandlordKyc.isPending||!item.indemnitySigned}>Approve</Button><Button variant="danger" onClick={()=>reviewLandlordKyc.mutate({userId:item.userId,data:{decision:'rejected'}},{onSuccess:()=>{refresh(getListAdminLandlordKycQueueQueryKey());statusMessage('Landlord KYC rejected.');}})} disabled={reviewLandlordKyc.isPending}>Reject</Button></div></div>)}</div> : <p className="text-sm text-[#718077]">No landlord KYC applications are waiting.</p> :
                  adminWorkspaceTab==='All Agents' ? <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">Agent</th><th className="p-2">Agency</th><th className="p-2">City</th><th className="p-2">Status</th></tr></thead><tbody>{adminWorkspace.agents.map(a=><tr key={a.id} className="border-t border-[#edf1ec]"><td className="p-2">{a.fullName}<span className="block text-xs text-[#718077]">{a.email}</span></td><td className="p-2">{a.agencyName||'—'}</td><td className="p-2">{a.town||'—'}</td><td className="p-2 capitalize">{a.verificationStatus||'unverified'}</td></tr>)}</tbody></table></div> :
-                 adminWorkspaceTab==='Properties' ? <div className="divide-y divide-[#edf1ec]">{adminWorkspace.properties.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><b className="text-sm">{p.title||'Untitled property'}</b><p className="text-xs text-[#718077]">{p.category} · {p.town}, {p.state} · {p.moderationStatus}</p></div>{p.moderationStatus==='pending'&&<div className="flex gap-2"><Button onClick={()=>reviewAdminProperty(p.id,'approved')}>Approve</Button><Button variant="danger" onClick={()=>reviewAdminProperty(p.id,'rejected')}>Reject</Button></div>}</div>)}</div> :
+                 adminWorkspaceTab==='Properties' ? propertyReviewQueue.isLoading ? <LoadingCard/> : propertyReviewQueue.isError ? <ErrorState onRetry={()=>propertyReviewQueue.refetch()} error={propertyReviewQueue.error}/> : propertyReviewQueue.data?.items.length ? <div className="space-y-4">{propertyReviewQueue.data.items.map(p=><AdminPropertyReviewCard key={p.id} property={p as AdminPropertyReview} accessToken={authSession?.access_token || ''} onDecision={reviewAdminProperty}/>)}</div> : <p className="text-sm text-[#718077]">No properties are waiting for moderation.</p> :
                  adminWorkspaceTab==='Users' ? <div className="overflow-x-auto"><table className="w-full min-w-[560px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">User</th><th className="p-2">Role</th><th className="p-2">Verification</th></tr></thead><tbody>{adminWorkspace.users.map(u=><tr key={u.id} className="border-t border-[#edf1ec]"><td className="p-2">{u.fullName||'—'}<span className="block text-xs text-[#718077]">{u.email}</span></td><td className="p-2 capitalize">{u.role}</td><td className="p-2 capitalize">{u.verificationStatus}</td></tr>)}</tbody></table></div> :
                   adminWorkspaceTab==='Agent payouts' ? <div className="divide-y divide-[#edf1ec]">{adminWorkspace.agentPayouts.length ? adminWorkspace.agentPayouts.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div><b className="text-sm">{money(p.amountNaira)} · <span className="capitalize">{p.status.replaceAll('_',' ')}</span></b><p className="mt-1 text-xs text-[#718077]">Transaction {p.transactionId} · Transfer ref {p.transferReference}</p>{p.recipientBankName&&<p className="mt-1 text-xs text-[#718077]">Recipient: {p.recipientBankName} · account ending {p.recipientAccountLast4}</p>}{p.providerStatus&&<p className="mt-1 text-xs text-[#718077]">Paystack: {p.providerStatus}</p>}{p.failureMessage&&<p className="mt-1 text-xs font-semibold text-[#9b3434]">{p.failureMessage}</p>}</div>{['initiating','pending','reconciliation_required'].includes(p.status)&&<Button variant="outline" onClick={()=>runAdminAction(`/api/admin/agent-commission-payouts/${encodeURIComponent(p.id)}/reconcile`,'Transfer status reconciled.')}>Reconcile</Button>}</div>) : <p className="py-3 text-sm text-[#718077]">No agent commission transfers have been approved.</p>}</div> :
                   <div className="overflow-x-auto"><table className="w-full min-w-[780px] text-left text-sm"><thead><tr className="text-xs text-[#718077]"><th className="p-2">Payment</th><th className="p-2">Status</th><th className="p-2">Amount</th><th className="p-2">Agent commission</th><th className="p-2">Platform fee</th><th className="p-2">Payout action</th></tr></thead><tbody>{adminWorkspace.payments.map(p=>{const payout=adminWorkspace.agentPayouts.find(item=>item.transactionId===p.id);return <tr key={p.id} className="border-t border-[#edf1ec]"><td className="p-2 font-mono-ui text-xs">{p.id}</td><td className="p-2 capitalize">{p.status}</td><td className="p-2">{money(p.amountNaira)}</td><td className="p-2">{money(p.agentFeeNaira)}</td><td className="p-2">{money(p.platformFeeNaira)}</td><td className="p-2">{payout?<span className="capitalize">{payout.status.replaceAll('_',' ')}</span>:Number(p.agentFeeNaira)>0?<Button onClick={()=>runAdminAction(`/api/admin/agent-commission-payouts/${encodeURIComponent(p.id)}/approve`,'Commission payout attempt recorded. Check Agent payouts for the provider result.','This will initiate a one-time agent commission transfer if escrow has been released. Continue?')}>Approve & transfer</Button>:'—'}</td></tr>})}</tbody></table></div>}
