@@ -408,6 +408,90 @@ router.get("/properties/:propertyId", async (req, res): Promise<void> => {
   res.json(GetPropertyResponse.parse(mapProperty(property)));
 });
 
+router.patch("/properties/:propertyId", requireAuth, async (req, res): Promise<void> => {
+  const params = GetPropertyParams.safeParse(req.params);
+  const parsed = CreatePropertyBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ message: "Check the listing details and try again." });
+    return;
+  }
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const current = await supabaseRest<Array<DbProperty & { owner_id: string | null }>>(
+    `properties?id=eq.${encodeURIComponent(params.data.propertyId)}&select=*&limit=1`,
+  );
+  const property = current[0];
+  if (!property) {
+    res.status(404).json({ message: "Property not found." });
+    return;
+  }
+  const role = await getUserRole(user.id);
+  if (property.owner_id !== user.id && role !== "admin") {
+    res.status(403).json({ message: "Only the listing owner can edit this property." });
+    return;
+  }
+  if (property.is_locked) {
+    res.status(409).json({ message: "This property is locked during an active transaction." });
+    return;
+  }
+  const input = parsed.data;
+  const isAccommodation = input.category === "hotel" || input.category === "short_let";
+  const hotelCacNumber = input.hotelCacNumber?.trim() || String(property["hotel_cac_number"] || "");
+  const emergencyContactPhone = input.emergencyContactPhone?.trim() || String(property["emergency_contact_phone"] || "");
+  const hotelCctvDisclosed = input.hotelCctvDisclosed ?? Boolean(property["hotel_cctv_disclosed"]);
+  if (isAccommodation && (!hotelCacNumber || !emergencyContactPhone || !hotelCctvDisclosed)) {
+    res.status(422).json({ message: "Hotels and short-lets require CAC, a public contact, and disclosed common-area camera terms." });
+    return;
+  }
+  if (input.intent === "rent" && !input.premisesRulesUrl?.trim()) {
+    res.status(422).json({ message: "Rental listings need premises rules before review." });
+    return;
+  }
+  const rows = await supabaseRest<DbProperty[]>(
+    `properties?id=eq.${encodeURIComponent(params.data.propertyId)}&select=*`,
+    {
+      method: "PATCH",
+      body: {
+        title: input.title.trim(),
+        category: input.category,
+        custom_type: input.customType?.trim() || null,
+        state: input.state.trim(),
+        town: input.town.trim(),
+        address: input.address?.trim() || "",
+        description: input.description?.trim() || "",
+        price_naira: input.priceNaira,
+        price_unit: input.priceUnit?.trim() || "total",
+        intent: input.intent,
+        bedrooms: input.bedrooms ?? 0,
+        bathrooms: input.bathrooms ?? 0,
+        size_sqm: input.sizeSqm ?? 0,
+        gps_lat: input.latitude,
+        gps_lng: input.longitude,
+        image_url: input.imageUrl?.trim() || null,
+        premises_rules_url: input.premisesRulesUrl?.trim() || null,
+        hotel_cac_number: isAccommodation ? hotelCacNumber : null,
+        emergency_contact_phone: isAccommodation ? emergencyContactPhone : null,
+        hotel_has_24_hour_reception: isAccommodation && (input.hotelHas24HourReception ?? Boolean(property["hotel_has_24_hour_reception"])),
+        hotel_cctv_common_areas: isAccommodation && (input.hotelCctvCommonAreas ?? Boolean(property["hotel_cctv_common_areas"])),
+        hotel_cctv_disclosed: isAccommodation && hotelCctvDisclosed,
+        hotel_safety_checkin_available: isAccommodation && (input.hotelSafetyCheckinAvailable ?? Boolean(property["hotel_safety_checkin_available"])),
+        pin_status: "pending",
+        listing_moderation_status: "pending",
+        hotel_verification_status: isAccommodation ? "pending" : "not_applicable",
+        hotel_verification_reviewed_at: null,
+        hotel_verification_reviewed_by: null,
+        updated_at: new Date().toISOString(),
+      },
+      prefer: "return=representation",
+    },
+  );
+  if (!rows[0]) {
+    res.status(404).json({ message: "Property was not updated." });
+    return;
+  }
+  res.json(GetPropertyResponse.parse(mapProperty(rows[0])));
+});
+
 router.post(
   "/properties/:propertyId/delisting-requests",
   requireAuth,

@@ -159,6 +159,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Property"
+    patch:
+      operationId: updateProperty
+      tags: [marketplace]
+      summary: Update an owned property listing
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PropertyInput"
+      responses:
+        "200":
+          description: Listing updated and returned to review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
   /properties/{propertyId}/photos:
     post:
       operationId: createPropertyPhoto

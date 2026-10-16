@@ -739,6 +739,95 @@ export function useGetProperty<TData = Awaited<ReturnType<typeof getProperty>>, 
 
 
 
+export const getUpdatePropertyUrl = (propertyId: string,) => {
+
+
+
+
+  return `/api/properties/${propertyId}`
+}
+
+/**
+ * @summary Update an owned property listing
+ */
+export const updateProperty = async (propertyId: string,
+    propertyInput: PropertyInput, options?: Parameters<typeof customFetch>[1]): Promise<Property> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<Property>(getUpdatePropertyUrl(propertyId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(propertyInput)
+  }
+);}
+
+
+
+
+
+export const getUpdatePropertyMutationKey = () => ['updateProperty'] as const;
+
+export const getUpdatePropertyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProperty>>, TError,UpdatePropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProperty>>, TError,UpdatePropertyMutationVariables, TContext> => {
+
+const mutationKey = getUpdatePropertyMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProperty>>, UpdatePropertyMutationVariables> = (props) => {
+          const {propertyId,data} = props ?? {};
+
+          return  updateProperty(propertyId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePropertyMutationResult = NonNullable<Awaited<ReturnType<typeof updateProperty>>>
+    export type UpdatePropertyMutationBody = BodyType<PropertyInput>
+    export type UpdatePropertyMutationError = ErrorType<unknown>
+    export type UpdatePropertyMutationVariables = {propertyId: string;data: BodyType<PropertyInput>}
+
+    /**
+ * @summary Update an owned property listing
+ */
+export const useUpdateProperty = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProperty>>, TError,UpdatePropertyMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProperty>>,
+        TError,
+        UpdatePropertyMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdatePropertyMutationOptions(options));
+    }
+
 export const getCreatePropertyPhotoUrl = (propertyId: string,) => {
 
 

@@ -18,9 +18,9 @@ import {
   getGetPayoutBanksQueryKey, getGetPayoutDestinationQueryKey, useGetPayoutBanks, useGetPayoutDestination,
   useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
   useListComplaints, useListProperties, useListSocialHousingUnits, useListSpecialRequests, useReleaseEscrow,
-  useRequestPropertyDelisting, useUpdateProfile,
+   useRequestPropertyDelisting, useUpdateProfile, useUpdateProperty,
 } from '@workspace/api-client-react';
-import type { ComplaintInput, FeeQuote, InstallmentQuote, ListProperties200, ListSocialHousingUnits200, ListSpecialRequests200, PayoutBank, PayoutDestination, ProcessingFeeSchedule, Property, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
+import type { ComplaintInput, FeeQuote, InstallmentQuote, ListProperties200, ListSocialHousingUnits200, ListSpecialRequests200, PayoutBank, PayoutDestination, ProcessingFeeSchedule, Property, PropertyInput, Profile, ProfileInput, SpecialRequestInput } from '@workspace/api-client-react';
 import {
   Activity, ArrowLeft, ArrowRight, BadgeCheck, Building2, Calculator, Check, ChevronDown, ChevronRight,
   CircleAlert, Compass, FileCheck2, FileText, HeartHandshake, Home, Landmark, LifeBuoy,
@@ -34,11 +34,12 @@ import PropertyLocationPicker from '@/components/PropertyLocationPicker';
 import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
 import AdminMockDashboard from '@/pages/AdminMockDashboard';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
+import ConstructionPage from '@/pages/ConstructionPage';
 
 const queryClient = new QueryClient();
 const ADMIN_MOCK_MODE = import.meta.env.DEV && import.meta.env.VITE_ADMIN_MOCK_MODE === 'true';
 const routes = [
-  ['/hotels', 'Hotels & short-lets', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
+  ['/hotels', 'Hotels & short-lets', Building2], ['/construction', 'Construction', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
   ['/agent-dashboard', 'Agent dashboard', Activity],
   ['/browse', 'Explore homes', Search], ['/map', 'Map search', MapPin], ['/list-property', 'List a property', Plus],
   ['/request-property', 'Find a property', Compass], ['/requests', 'My requests', ListChecks],
@@ -78,8 +79,8 @@ function SelectField({ label, name, options, defaultValue, disabledOptions = [] 
   return <label className="block text-sm font-semibold text-[#304039]">{label}<select data-testid={`input-${name}`} name={name} defaultValue={defaultValue} className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal text-[#17211b] outline-none focus:border-[#16A34A]">
     {options.map(([value, text]) => <option key={value} value={value} disabled={disabledOptions.includes(value)}>{text}</option>)}</select></label>;
 }
-function TextArea({ label, name, placeholder, required = false }: { label: string; name: string; placeholder?: string; required?: boolean }) {
-  return <label className="block text-sm font-semibold text-[#304039]">{label}<textarea data-testid={`input-${name}`} name={name} required={required} placeholder={placeholder} rows={4}
+function TextArea({ label, name, placeholder, required = false, defaultValue }: { label: string; name: string; placeholder?: string; required?: boolean; defaultValue?: string }) {
+  return <label className="block text-sm font-semibold text-[#304039]">{label}<textarea data-testid={`input-${name}`} name={name} required={required} placeholder={placeholder} defaultValue={defaultValue} rows={4}
     className="mt-2 block w-full resize-y rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal text-[#17211b] outline-none focus:border-[#16A34A] focus:ring-4 focus:ring-[#16A34A]/10" /></label>;
 }
 function Button({ children, onClick, type = 'button', variant = 'primary', disabled = false, testId }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; variant?: 'primary' | 'light' | 'outline' | 'danger'; disabled?: boolean; testId?: string }) {
@@ -201,9 +202,61 @@ function PropertyCard({ property }: { property: Property }) {
     </div>
   </Link>;
 }
+function EditPropertyForm({ property, pending, error, onSave }: {
+  property: Property;
+  pending: boolean;
+  error: string;
+  onSave: (data: PropertyInput) => void;
+}) {
+  const [coordinates, setCoordinates] = useState({ latitude: property.latitude || 0, longitude: property.longitude || 0 });
+  return <form onSubmit={event => {
+    event.preventDefault();
+    const fd = new FormData(event.currentTarget);
+    onSave({
+      title: String(fd.get('title') || ''),
+      category: String(fd.get('category')) as PropertyInput['category'],
+      customType: String(fd.get('customType') || '') || undefined,
+      state: String(fd.get('state') || ''),
+      town: String(fd.get('town') || ''),
+      address: String(fd.get('address') || '') || undefined,
+      description: String(fd.get('description') || '') || undefined,
+      priceNaira: Number(fd.get('priceNaira')),
+      priceUnit: String(fd.get('priceUnit') || '') || undefined,
+      intent: String(fd.get('intent')) as PropertyInput['intent'],
+      bedrooms: Number(fd.get('bedrooms')) || 0,
+      bathrooms: Number(fd.get('bathrooms')) || 0,
+      sizeSqm: Number(fd.get('sizeSqm')) || 0,
+      latitude: Number(fd.get('latitude')),
+      longitude: Number(fd.get('longitude')),
+      imageUrl: String(fd.get('imageUrl') || '') || undefined,
+      premisesRulesUrl: property.premisesRulesUrl || undefined,
+    });
+  }} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
+    <div className="grid gap-4 sm:grid-cols-2">
+      <Field label="Listing title" name="title" required defaultValue={property.title}/>
+      <SelectField label="Property type" name="category" defaultValue={property.category} options={[['home','Home'],['land','Land'],['warehouse','Warehouse'],['complex','Complex'],['shopping_mall','Shopping mall'],['hotel','Hotel'],['short_let','Short-let'],['school','School'],['hospital','Hospital'],['filling_station','Filling station'],['worship_center','Worship center'],['factory','Factory'],['multipurpose_hall','Multipurpose hall'],['custom','Other / custom']]}/>
+      <Field label="Custom type (if applicable)" name="customType" defaultValue={property.customType}/>
+      <SelectField label="Listing intent" name="intent" defaultValue={property.intent} options={[['sale','For sale'],['rent','For rent'],['lease','For lease'],['social','Shared housing']]}/>
+      <Field label="State" name="state" required defaultValue={property.state}/>
+      <Field label="Town / city" name="town" required defaultValue={property.town}/>
+      <Field label="Street address" name="address" defaultValue={property.address}/>
+      <Field label="Price (₦)" name="priceNaira" type="number" min={1} required defaultValue={property.priceNaira}/>
+      <Field label="Price unit" name="priceUnit" defaultValue={property.priceUnit}/>
+      <Field label="Bedrooms" name="bedrooms" type="number" min={0} defaultValue={property.bedrooms}/>
+      <Field label="Bathrooms" name="bathrooms" type="number" min={0} defaultValue={property.bathrooms}/>
+      <Field label="Size (m²)" name="sizeSqm" type="number" min={0} defaultValue={property.sizeSqm}/>
+      <Field label="Image URL" name="imageUrl" type="url" defaultValue={property.imageUrl}/>
+    </div>
+    <PropertyLocationPicker latitude={coordinates.latitude} longitude={coordinates.longitude} onCoordinatesChange={(latitude, longitude) => setCoordinates({ latitude, longitude })}/>
+    <TextArea label="Description" name="description" defaultValue={property.description}/>
+    {error && <Notice tone="red">{error}</Notice>}
+    <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save changes for review'}</Button>
+  </form>;
+}
 function AppContent() {
   const [location, navigate] = useLocation();
   const [propertyRoute, propertyRouteParams] = useRoute('/property/:id');
+  const [editPropertyRoute, editPropertyParams] = useRoute('/property/:id/edit');
   const [mobileMore, setMobileMore] = useState(false);
   const [notice, setNotice] = useState('');
   const [propertyProof, setPropertyProof] = useState<LivePropertyProof | null>(null);
@@ -271,8 +324,10 @@ function AppContent() {
   const reviewLandlordKyc = useReviewLandlordKyc();
   const hotelQueue = useListAdminHotelVerificationQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin', queryKey: getListAdminHotelVerificationQueueQueryKey() } });
   const propertyReviewQueue = useListAdminPropertyQueue({ query: { enabled: !ADMIN_MOCK_MODE && location === '/admin' && adminWorkspaceTab === 'Properties', queryKey: getListAdminPropertyQueueQueryKey(), retry: false } });
-  const singleProperty = useGetProperty(propertyRouteParams?.id || '', { query: { enabled: !!propertyRoute && !!propertyRouteParams?.id, queryKey: getGetPropertyQueryKey(propertyRouteParams?.id || '') } });
+  const selectedPropertyId = editPropertyParams?.id || propertyRouteParams?.id || '';
+  const singleProperty = useGetProperty(selectedPropertyId, { query: { enabled: (!!propertyRoute || !!editPropertyRoute) && !!selectedPropertyId, queryKey: getGetPropertyQueryKey(selectedPropertyId) } });
   const createProperty = useCreateProperty();
+  const updateProperty = useUpdateProperty();
   const createRequest = useCreateSpecialRequest();
   const createComplaint = useCreateComplaint();
   const updateProfile = useUpdateProfile();
@@ -421,6 +476,20 @@ function AppContent() {
       navigate(result.category === 'hotel' || result.category === 'short_let' ? '/hotels' : `/property/${result.id}`);
     } });
   };
+  const submitPropertyEdit = (propertyId: string, data: PropertyInput) => {
+    updateProperty.mutate({ propertyId, data }, {
+      onSuccess: async () => {
+        await Promise.all([
+          refresh(getGetPropertyQueryKey(propertyId)),
+          refresh(getListPropertiesQueryKey(propertyFilters)),
+          refresh(getListPropertiesQueryKey({})),
+          refresh(getGetDashboardQueryKey()),
+        ]);
+        statusMessage('Listing changes submitted for location and property review.');
+        navigate(`/property/${propertyId}`);
+      },
+    });
+  };
   const submitRequest = (fd: FormData) => {
     const input: SpecialRequestInput = {
       requestType: String(fd.get('requestType')) as SpecialRequestInput['requestType'], customCategory: String(fd.get('customCategory') || '') || undefined,
@@ -539,6 +608,16 @@ function AppContent() {
     if (!response.ok) throw new Error(payload?.message || 'Buyer confirmation could not be recorded.');
   };
   const content = () => {
+    if (editPropertyRoute) {
+      const property = singleProperty.data;
+      if (!authSession) return <div className="space-y-4"><PageIntro eyebrow="Edit listing" title="Sign in to continue" text="Only the listing owner can make changes."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
+      if (singleProperty.isLoading) return <LoadingCard/>;
+      if (singleProperty.isError || !property) return <ErrorState error={singleProperty.error} onRetry={() => singleProperty.refetch()}/>;
+      return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="Owner / agent workspace" title="Edit property" text="Changes return the property and location pin to review."/>
+        <Notice>Saving changes resets location and moderation approval. You can use a photo’s GPS or click the map to set the updated location.</Notice>
+        <EditPropertyForm property={property} pending={updateProperty.isPending} error={updateProperty.isError ? 'Could not save changes. Check your access and listing details.' : ''} onSave={data => submitPropertyEdit(property.id, data)}/>
+      </div>;
+    }
     if (propertyRoute) {
       const p = singleProperty.data;
       return <div className="space-y-6">{singleProperty.isLoading ? <LoadingCard/> : singleProperty.isError ? <ErrorState onRetry={() => singleProperty.refetch()}/> : !p ? <EmptyState title="Listing unavailable" body="This property could not be found."/> :
@@ -552,13 +631,15 @@ function AppContent() {
               <div className="mt-6"><Notice>Estatehold checks location pins and makes tenant-protection status visible. Always inspect and confirm terms before making a commitment.</Notice></div>
               {p.premisesRulesUrl && <a href={p.premisesRulesUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#28763d]"><FileText size={15}/>View premises rules</a>}</div></div>
             <aside className="h-fit rounded-3xl border border-[#e3e9e2] bg-white p-6"><p className="font-display text-3xl font-extrabold">{money(p.priceNaira)}</p><p className="mt-1 text-sm text-[#748077]">{p.priceUnit || (p.intent === 'rent' ? 'per year' : p.intent)}</p>
-              <div className="mt-5 space-y-3"><Link href="/wallet" className="flex min-h-12 items-center justify-center rounded-xl bg-[#0B0F0E] px-4 text-sm font-bold text-white">Review fees & checkout</Link><Link href="/tenancy-agreement" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Prepare tenancy draft</Link></div>
+               <div className="mt-5 space-y-3">{authSession && <Link href={`/property/${p.id}/edit`} className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Edit listing</Link>}<Link href="/wallet" className="flex min-h-12 items-center justify-center rounded-xl bg-[#0B0F0E] px-4 text-sm font-bold text-white">Review fees & checkout</Link><Link href="/tenancy-agreement" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Prepare tenancy draft</Link></div>
               <p className="mt-4 flex items-center gap-2 text-xs leading-5 text-[#718077]"><LockKeyhole size={14}/>Payments stay in test mode. Escrow release is disabled pending compliance approval.</p>
               <Button variant="outline" onClick={() => { if (confirm('Request an operations review to delist this property?')) delisting.mutate({ propertyId: p.id }, { onSuccess: () => { refresh(getGetPropertyQueryKey(p.id)); refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getGetDashboardQueryKey()); statusMessage('Delisting review requested.') } }); }} disabled={delisting.isPending} testId="button-request-delist" >{delisting.isPending ? 'Sending…' : 'Request review to delist'}</Button>
             </aside></div></>}
       </div>;
     }
     switch (location) {
+      case '/construction':
+        return <ConstructionPage/>;
       case '/': {
         const greeting = timeGreeting();
         return <div className="space-y-8">
@@ -919,7 +1000,7 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
 }
 function Router() {
   return <RoutedErrorBoundary><Switch>
-    <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
+    <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/construction"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id/edit"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
     <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>

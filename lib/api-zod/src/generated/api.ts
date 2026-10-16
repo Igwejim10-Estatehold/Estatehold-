@@ -335,6 +335,94 @@ export const GetPropertyResponse = zod.object({
 
 
 /**
+ * @summary Update an owned property listing
+ */
+export const UpdatePropertyParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const updatePropertyBodyTitleMin = 3;
+export const updatePropertyBodyTitleMax = 120;
+
+
+export const updatePropertyBodyBedroomsMin = 0;
+
+export const updatePropertyBodyBathroomsMin = 0;
+
+export const updatePropertyBodySizeSqmMin = 0;
+
+
+
+export const UpdatePropertyBody = zod.object({
+  "title": zod.string().min(updatePropertyBodyTitleMin).max(updatePropertyBodyTitleMax),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
+  "customType": zod.string().optional(),
+  "state": zod.string(),
+  "town": zod.string(),
+  "address": zod.string().optional(),
+  "description": zod.string().optional(),
+  "priceNaira": zod.number().int().min(1),
+  "priceUnit": zod.string().optional(),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
+  "bedrooms": zod.number().int().min(updatePropertyBodyBedroomsMin).optional(),
+  "bathrooms": zod.number().int().min(updatePropertyBodyBathroomsMin).optional(),
+  "sizeSqm": zod.number().int().min(updatePropertyBodySizeSqmMin).optional(),
+  "latitude": zod.number(),
+  "longitude": zod.number(),
+  "imageUrl": zod.string().optional(),
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelCacNumber": zod.string().optional(),
+  "emergencyContactPhone": zod.string().optional(),
+  "hotelHas24HourReception": zod.boolean().optional(),
+  "hotelCctvCommonAreas": zod.boolean().optional(),
+  "hotelCctvDisclosed": zod.boolean().optional(),
+  "hotelSafetyCheckinAvailable": zod.boolean().optional()
+})
+
+export const updatePropertyResponsePriceNairaMin = 0;
+
+export const updatePropertyResponseBedroomsMin = 0;
+
+export const updatePropertyResponseBathroomsMin = 0;
+
+export const updatePropertyResponseSizeSqmMin = 0;
+
+
+
+export const UpdatePropertyResponse = zod.object({
+  "id": zod.string(),
+  "title": zod.string(),
+  "category": zod.enum(['land', 'home', 'warehouse', 'complex', 'shopping_mall', 'hotel', 'short_let', 'school', 'hospital', 'filling_station', 'worship_center', 'factory', 'multipurpose_hall', 'custom']),
+  "customType": zod.string().optional(),
+  "state": zod.string(),
+  "town": zod.string(),
+  "address": zod.string().optional(),
+  "description": zod.string().optional(),
+  "priceNaira": zod.number().int().min(updatePropertyResponsePriceNairaMin),
+  "priceUnit": zod.string().optional(),
+  "intent": zod.enum(['sale', 'rent', 'lease', 'social']),
+  "bedrooms": zod.number().int().min(updatePropertyResponseBedroomsMin).optional(),
+  "bathrooms": zod.number().int().min(updatePropertyResponseBathroomsMin).optional(),
+  "sizeSqm": zod.number().int().min(updatePropertyResponseSizeSqmMin).optional(),
+  "latitude": zod.number().optional(),
+  "longitude": zod.number().optional(),
+  "imageUrl": zod.string().optional(),
+  "pinStatus": zod.enum(['verified', 'pending', 'dispute', 'tenant_protected']),
+  "isManaged": zod.boolean().optional(),
+  "isExclusive": zod.boolean(),
+  "isLocked": zod.boolean(),
+  "listingModerationStatus": zod.enum(['pending', 'approved', 'rejected']),
+  "premisesRulesUrl": zod.string().optional(),
+  "hotelVerificationStatus": zod.enum(['not_applicable', 'pending', 'verified', 'rejected']),
+  "hotelHas24HourReception": zod.boolean(),
+  "hotelCctvCommonAreas": zod.boolean(),
+  "hotelCctvDisclosed": zod.boolean(),
+  "hotelSafetyCheckinAvailable": zod.boolean(),
+  "emergencyContactPhone": zod.string().optional()
+})
+
+
+/**
  * @summary Save a live property verification photo
  */
 export const CreatePropertyPhotoParams = zod.object({
