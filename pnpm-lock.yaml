@@ -189,6 +189,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      piexifjs:
+        specifier: ^1.0.6
+        version: 1.0.6
       pino:
         specifier: ^9.14.0
         version: 9.14.0

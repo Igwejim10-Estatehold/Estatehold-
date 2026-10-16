@@ -23,6 +23,7 @@ import {
   type DbProperty,
   type DbRow,
 } from "../lib/estatehold";
+import { readBoundedPhotoBody, validateStoredPropertyPhotoExif } from "../lib/property-photo-exif";
 import { fetchPrivatePropertyPhoto, getPublicConfig, SupabaseRequestError, supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
@@ -244,6 +245,46 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
   const ageMs = Date.now() - takenAt;
   if (!Number.isFinite(takenAt) || ageMs < -60_000 || ageMs > 30 * 60_000) {
     res.status(400).json({ message: "Capture a fresh live photo before submitting." });
+    return;
+  }
+  let storedPhoto: globalThis.Response;
+  try {
+    storedPhoto = await fetchPrivatePropertyPhoto(photoPath);
+  } catch {
+    res.status(503).json({ message: "The private verification photo could not be checked. Try again shortly." });
+    return;
+  }
+  if (!storedPhoto.ok) {
+    res.status(storedPhoto.status === 404 ? 400 : 503).json({
+      message: storedPhoto.status === 404
+        ? "The private verification photo was not found. Upload the photo again and retry."
+        : "The private verification photo could not be checked. Try again shortly.",
+    });
+    return;
+  }
+  const contentType = (storedPhoto.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
+  if (contentType !== "image/jpeg") {
+    res.status(422).json({ message: "The stored verification photo is not a JPEG. Retake and upload the photo again." });
+    return;
+  }
+  let storedImage: Buffer | null;
+  try {
+    storedImage = await readBoundedPhotoBody(storedPhoto);
+  } catch {
+    res.status(503).json({ message: "The private verification photo could not be checked. Try again shortly." });
+    return;
+  }
+  if (!storedImage) {
+    res.status(413).json({ message: "The verification photo is too large. Retake it at a lower image size." });
+    return;
+  }
+  const exifValidation = validateStoredPropertyPhotoExif(storedImage, {
+    latitude: parsed.data.latitude,
+    longitude: parsed.data.longitude,
+    takenAt: parsed.data.takenAt,
+  });
+  if (!exifValidation.valid) {
+    res.status(422).json({ message: exifValidation.message });
     return;
   }
   const rad = Math.PI / 180;

@@ -10,6 +10,7 @@
     "rotate:payout-encryption": "pnpm run build && node --enable-source-maps ./dist/rotate-payout-encryption.mjs",
     "test:payout-encryption": "node --experimental-strip-types --test ./tests/payout-encryption.test.mjs",
     "test:payout-security": "node --experimental-strip-types --test ./tests/payout-security.test.mjs",
+    "test:property-photo-exif": "node --experimental-strip-types --test ./tests/property-photo-exif.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
     "cors": "^2.8.6",
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
+    "piexifjs": "^1.0.6",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0"
   },

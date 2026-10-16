@@ -13,8 +13,20 @@ export function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: n
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 function gpsDms(value: number): [[number, number], [number, number], [number, number]] {
-  const abs = Math.abs(value), degrees = Math.floor(abs), minutesFloat = (abs - degrees) * 60, minutes = Math.floor(minutesFloat);
-  return [[degrees, 1], [minutes, 1], [Math.round((minutesFloat - minutes) * 60000), 1000]];
+  const abs = Math.abs(value);
+  let degrees = Math.floor(abs);
+  const minutesFloat = (abs - degrees) * 60;
+  let minutes = Math.floor(minutesFloat);
+  let secondThousandths = Math.round((minutesFloat - minutes) * 60000);
+  if (secondThousandths >= 60_000) {
+    secondThousandths = 0;
+    minutes += 1;
+    if (minutes === 60) {
+      minutes = 0;
+      degrees += 1;
+    }
+  }
+  return [[degrees, 1], [minutes, 1], [secondThousandths, 1000]];
 }
 function gpsTime(date: Date): [[number, number], [number, number], [number, number]] {
   return [[date.getUTCHours(), 1], [date.getUTCMinutes(), 1], [date.getUTCSeconds(), 1]];
@@ -61,7 +73,7 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
       canvas.getContext('2d')?.drawImage(video, 0, 0);
       const raw = canvas.toDataURL('image/jpeg', 0.9);
       const date = new Date();
-      const stamp = date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, '');
+      const stamp = date.toISOString().slice(0, 19).replace(/-/g, ':').replace('T', ' ');
       const device = navigator.userAgent.slice(0, 200);
       const exif = piexif.dump({
         '0th': { 271: 'Estatehold live camera', 272: device },
@@ -77,7 +89,7 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
     finally { setBusy(false); }
   };
   return <section className="space-y-3 rounded-2xl border border-[#dce5dd] bg-[#f7faf6] p-4 sm:col-span-2">
-    <div><h3 className="font-bold">Live property verification photo</h3><p className="mt-1 text-xs leading-5 text-[#68776d]">Camera-only capture; no gallery upload. Location is requested only when you start capture.</p></div>
+    <div><h3 className="font-bold">Live property verification photo</h3><p className="mt-1 text-xs leading-5 text-[#68776d]">Camera capture and GPS/time metadata provide a verification signal, not cryptographic proof; browser-provided details can be altered. No gallery upload is accepted. Location is requested only when you start capture.</p></div>
     {!cameraReady ? <button type="button" disabled={busy} onClick={start} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Opening camera…' : 'Take Live Photo at Location'}</button> :
       <div className="space-y-3"><video ref={videoRef} autoPlay playsInline muted className="max-h-72 w-full rounded-xl bg-black object-cover"/><button type="button" disabled={busy} onClick={capture} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Capturing…' : 'Capture live photo'}</button></div>}
     {proof && distance !== null && <div className="space-y-2">
