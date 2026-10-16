@@ -7,6 +7,7 @@ import {
   useListProperties,
 } from '@workspace/api-client-react';
 import type { Property, PropertyInput } from '@workspace/api-client-react';
+import PropertyLocationPicker from '@/components/PropertyLocationPicker';
 import {
   ArrowRight, BadgeCheck, Building2, Camera, Check, Clock3, ExternalLink,
   MapPin, Phone, ShieldCheck, Smartphone, X,
@@ -71,14 +72,23 @@ export default function HotelsPage({ authSession }: { authSession: Session }) {
   const queryClient = useQueryClient();
   const listings = useListProperties(undefined, { query: { queryKey: getListPropertiesQueryKey() } });
   const createProperty = useCreateProperty();
+  const [coordinates, setCoordinates] = useState({ latitude: 0, longitude: 0 });
+  const [locationError, setLocationError] = useState('');
   const visible = (listings.data?.items || []).filter(p =>
     (p.category === 'hotel' || p.category === 'short_let') &&
     p.hotelVerificationStatus === 'verified' && p.pinStatus === 'verified',
   );
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setLocationError('');
     const form = event.currentTarget;
     const fd = new FormData(form);
+    const latitude = Number(fd.get('latitude'));
+    const longitude = Number(fd.get('longitude'));
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
+      setLocationError('Choose a location from a photo or click the map to drop a pin before submitting.');
+      return;
+    }
     const input: PropertyInput = {
       title: String(fd.get('title')).trim(),
       category: String(fd.get('category')) as PropertyInput['category'],
@@ -89,8 +99,8 @@ export default function HotelsPage({ authSession }: { authSession: Session }) {
       priceNaira: Number(fd.get('priceNaira')),
       priceUnit: String(fd.get('priceUnit') || '').trim() || undefined,
       intent: 'rent',
-      latitude: Number(fd.get('latitude')) || 0,
-      longitude: Number(fd.get('longitude')) || 0,
+      latitude,
+      longitude,
       imageUrl: String(fd.get('imageUrl') || '').trim() || undefined,
       premisesRulesUrl: String(fd.get('premisesRulesUrl')).trim(),
       hotelCacNumber: String(fd.get('hotelCacNumber')).trim(),
@@ -144,10 +154,9 @@ export default function HotelsPage({ authSession }: { authSession: Session }) {
             <label className="block text-sm font-semibold text-[#304039] sm:col-span-2">Guest terms / premises rules URL<input name="premisesRulesUrl" type="url" required placeholder="https://…" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
             <label className="block text-sm font-semibold text-[#304039]">CAC registration number<input name="hotelCacNumber" required placeholder="Private; sent for review" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/><span className="mt-1 block text-xs font-normal text-[#7b887e]">Private to the review process.</span></label>
             <label className="block text-sm font-semibold text-[#304039]">Emergency / reception phone<input name="emergencyContactPhone" type="tel" required placeholder="+234…" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
-            <label className="block text-sm font-semibold text-[#304039]">Listing image URL<input name="imageUrl" type="url" placeholder="https://… (optional)" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
-            <label className="block text-sm font-semibold text-[#304039]">Latitude<input name="latitude" type="number" step="any" placeholder="0 if not known" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
-            <label className="block text-sm font-semibold text-[#304039]">Longitude<input name="longitude" type="number" step="any" placeholder="0 if not known" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
+            <label className="block text-sm font-semibold text-[#304039] sm:col-span-2">Listing image URL<input name="imageUrl" type="url" placeholder="https://… (optional)" className="mt-2 block w-full rounded-xl border border-[#dfe6df] bg-white px-3.5 py-3 font-normal outline-none focus:border-[#16A34A]"/></label>
           </div>
+          <PropertyLocationPicker latitude={coordinates.latitude} longitude={coordinates.longitude} onCoordinatesChange={(latitude, longitude) => setCoordinates({ latitude, longitude })}/>
           <div className="grid gap-3 rounded-2xl bg-[#f5f8f3] p-4 sm:grid-cols-2">
             {[
               ['hotelHas24HourReception','24-hour reception available'],
@@ -157,6 +166,7 @@ export default function HotelsPage({ authSession }: { authSession: Session }) {
             ].map(([name,label])=><label key={name} className="flex items-start gap-2.5 text-sm leading-5 text-[#4c5f50]"><input name={name} type="checkbox" className="mt-0.5 h-4 w-4 accent-[#28763d]"/>{label}</label>)}
           </div>
           <div className="rounded-2xl border border-[#eadcb8] bg-[#fff9e9] p-4 text-sm leading-6 text-[#755d21]"><p className="font-bold">Camera and guest privacy acknowledgement</p><p className="mt-1">Any CCTV is limited to disclosed common areas. Monitoring inside guest rooms is prohibited.</p><label className="mt-3 flex items-start gap-2.5 font-semibold"><input name="privacyAcknowledged" type="checkbox" required className="mt-1 h-4 w-4 accent-[#28763d]"/>I confirm the camera disclosure above and acknowledge no inside-room monitoring.</label></div>
+          {locationError && <PanelMessage tone="error">{locationError}</PanelMessage>}
           {createProperty.isError && <PanelMessage tone="error">Submission failed. Please check the details and retry. {createProperty.error instanceof Error ? createProperty.error.message : ''}</PanelMessage>}
           {createProperty.isSuccess && <PanelMessage tone="success">Submission received. Your listing remains pending until an administrator reviews it. It is not visible in the public directory yet.</PanelMessage>}
           <button type="submit" disabled={createProperty.isPending} className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-[#0B0F0E] px-5 text-sm font-bold text-white transition hover:bg-[#1a2921] disabled:cursor-not-allowed disabled:opacity-60">{createProperty.isPending ? 'Submitting for review…' : 'Submit for review'} <ArrowRight size={16}/></button>

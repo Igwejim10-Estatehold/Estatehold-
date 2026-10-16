@@ -30,6 +30,7 @@ import {
 import NotFound from '@/pages/not-found';
 import LandlordKycPage from '@/pages/LandlordKycPage';
 import EstateholdMap from '@/components/EstateholdMap';
+import PropertyLocationPicker from '@/components/PropertyLocationPicker';
 import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
 import AdminMockDashboard from '@/pages/AdminMockDashboard';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
@@ -337,6 +338,11 @@ function AppContent() {
   }, [googleMapsKey]);
   useEffect(() => { setNotice(''); }, [location]);
   useEffect(() => {
+    if (location === '/list-property' || location === '/hotels') {
+      setListingCoordinates({ latitude: 0, longitude: 0 });
+    }
+  }, [location]);
+  useEffect(() => {
     if (dashboard.data?.dataSource === 'mock' || propertiesQuery.data?.dataSource === 'mock') {
       setNotice('Live data offline — showing clearly labeled demo properties.');
     }
@@ -346,10 +352,6 @@ function AppContent() {
   const profileTown = profile.data?.town || dashboard.data?.location || 'your area';
   const submitWith = (handler: (data: FormData) => void) => (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault(); handler(new FormData(event.currentTarget));
-  };
-  const syncListingCoordinates = (event: FormEvent<HTMLFormElement>) => {
-    const form = new FormData(event.currentTarget);
-    setListingCoordinates({ latitude: Number(form.get('latitude')) || 0, longitude: Number(form.get('longitude')) || 0 });
   };
   const refresh = (key: readonly unknown[]) => queryClient.invalidateQueries({ queryKey: key });
   const statusMessage = (message: string) => { setNotice(message); };
@@ -374,12 +376,18 @@ function AppContent() {
   const routeTitle = routes.find(([path]) => path === location)?.[1] || '';
   const submitProperty = (fd: FormData) => {
     setPropertyProofError('');
+    const latitude = Number(fd.get('latitude'));
+    const longitude = Number(fd.get('longitude'));
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || (latitude === 0 && longitude === 0)) {
+      setPropertyProofError('Choose a location from a photo or click the map to drop a pin before submitting.');
+      return;
+    }
     const input = {
       title: String(fd.get('title')), category: String(fd.get('category')) as Property['category'], customType: String(fd.get('customType') || '') || undefined,
       state: String(fd.get('state')), town: String(fd.get('town')), address: String(fd.get('address') || '') || undefined, description: String(fd.get('description') || '') || undefined,
       priceNaira: Number(fd.get('priceNaira')), priceUnit: String(fd.get('priceUnit') || '') || undefined, intent: String(fd.get('intent')) as Property['intent'],
       bedrooms: Number(fd.get('bedrooms')) || undefined, bathrooms: Number(fd.get('bathrooms')) || undefined, sizeSqm: Number(fd.get('sizeSqm')) || undefined,
-      latitude: Number(fd.get('latitude')) || 0, longitude: Number(fd.get('longitude')) || 0, imageUrl: String(fd.get('imageUrl') || '') || undefined, premisesRulesUrl: String(fd.get('premisesRulesUrl') || '') || undefined,
+      latitude, longitude, imageUrl: String(fd.get('imageUrl') || '') || undefined, premisesRulesUrl: String(fd.get('premisesRulesUrl') || '') || undefined,
       hotelCacNumber: String(fd.get('hotelCacNumber') || '') || undefined,
       emergencyContactPhone: String(fd.get('emergencyContactPhone') || '') || undefined,
       hotelHas24HourReception: Boolean(fd.get('hotelHas24HourReception')),
@@ -601,8 +609,9 @@ function AppContent() {
               {p.hotelSafetyCheckinAvailable && p.emergencyContactPhone && <div className="mt-2 w-full rounded-xl bg-[#f7f9f5] p-3"><label className="flex items-start gap-2 text-xs leading-5 text-[#59695e]"><input type="checkbox" checked={Boolean(checkInConsents[p.id])} onChange={e=>setCheckInConsents(s=>({...s,[p.id]:e.target.checked}))} className="mt-1 accent-[#16A34A]"/>I consent to request an optional safety check-in via SMS. No location or room activity is shared by Estatehold.</label>{checkInConsents[p.id] && <a className="mt-3 inline-flex text-sm font-bold text-[#18783a]" href={`sms:${encodeURIComponent(p.emergencyContactPhone)}?body=${encodeURIComponent(`I consent to a voluntary safety check-in for my stay at ${p.title}.`)}`}>Open SMS to request check-in</a>}</div>}</div>
             </div></article>)}</div> : <EmptyState icon={Building2} title="No verified stays yet" body="Only accommodation with approved hotel and location verification appears here. Owners can submit a hotel or short-let for review below."/>}
           <section className="mx-auto max-w-3xl space-y-4"><PageIntro eyebrow="For hotel & short-let owners" title="Submit an accommodation listing" text="CAC and contact details are private to the verification team. Approval is required before a listing appears in the verified directory."/>
-            {!authSession ? <Notice tone="amber">Sign in with an owner or agent account to submit a listing. <Link href="/sign-in" className="font-bold underline">Sign in</Link></Notice> : <form onChange={syncListingCoordinates} onSubmit={submitWith(submitProperty)} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
-              <div className="grid gap-4 sm:grid-cols-2"><Field label="Accommodation name" name="title" required/><SelectField label="Type" name="category" options={[['hotel','Hotel'],['short_let','Short-let']]}/><Field label="CAC registration number" name="hotelCacNumber" required/><Field label="Public reception / emergency contact" name="emergencyContactPhone" type="tel" required placeholder="+234…"/><Field label="State" name="state" required/><Field label="City / town" name="town" required/><Field label="Street address" name="address" required/><Field label="Price (₦)" name="priceNaira" type="number" min={1} required/><Field label="Price unit" name="priceUnit" defaultValue="per night"/><Field label="Guest terms / house rules URL" name="premisesRulesUrl" type="url" required placeholder="https://…"/><Field label="Latitude" name="latitude" type="number" step={0.000001} required/><Field label="Longitude" name="longitude" type="number" step={0.000001} required/></div>
+             {!authSession ? <Notice tone="amber">Sign in with an owner or agent account to submit a listing. <Link href="/sign-in" className="font-bold underline">Sign in</Link></Notice> : <form onSubmit={submitWith(submitProperty)} className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7">
+               <div className="grid gap-4 sm:grid-cols-2"><Field label="Accommodation name" name="title" required/><SelectField label="Type" name="category" options={[['hotel','Hotel'],['short_let','Short-let']]}/><Field label="CAC registration number" name="hotelCacNumber" required/><Field label="Public reception / emergency contact" name="emergencyContactPhone" type="tel" required placeholder="+234…"/><Field label="State" name="state" required/><Field label="City / town" name="town" required/><Field label="Street address" name="address" required/><Field label="Price (₦)" name="priceNaira" type="number" min={1} required/><Field label="Price unit" name="priceUnit" defaultValue="per night"/><Field label="Guest terms / house rules URL" name="premisesRulesUrl" type="url" required placeholder="https://…"/></div>
+               <PropertyLocationPicker latitude={listingCoordinates.latitude} longitude={listingCoordinates.longitude} onCoordinatesChange={(latitude, longitude) => setListingCoordinates({ latitude, longitude })}/>
               <div className="space-y-3 rounded-xl bg-[#f7f9f5] p-4 text-sm"><label className="flex gap-2"><input type="checkbox" name="hotelHas24HourReception" className="mt-1 accent-[#16A34A]"/>24-hour reception is available</label><label className="flex gap-2"><input type="checkbox" name="hotelCctvCommonAreas" className="mt-1 accent-[#16A34A]"/>CCTV is used in common areas</label><label className="flex gap-2"><input type="checkbox" name="hotelSafetyCheckinAvailable" className="mt-1 accent-[#16A34A]"/>Offer voluntary safety check-in by SMS</label><label className="flex gap-2 font-semibold"><input type="checkbox" name="hotelCctvDisclosed" required className="mt-1 accent-[#16A34A]"/>I confirm there is no monitoring inside guest rooms and any CCTV is disclosed and limited to common areas.</label></div>
                <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
                {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
@@ -633,10 +642,11 @@ function AppContent() {
         return <MapSearchPage properties={filteredProperties} loading={propertiesQuery.isLoading} failed={propertiesQuery.isError} apiKey={googleMapsKey} mapsState={googleMapsState} onRetry={() => propertiesQuery.refetch()}/>;
       case '/list-property':
         return <div className="mx-auto max-w-3xl space-y-5"><PageIntro eyebrow="For owners & agents" title="Add a property" text="Share accurate details. Location verification makes the listing clearer for everyone."/><Notice>Your pin location is part of the listing review. Use the property’s real coordinates; new pins show as pending until verified.</Notice>
-          <form onChange={syncListingCoordinates} onSubmit={submitWith(submitProperty)} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
+          <form onSubmit={submitWith(submitProperty)} className="space-y-5 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-8">
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Listing title" name="title" required placeholder="e.g. Two-bedroom apartment near..." /><SelectField label="Property type" name="category" options={[['home','Home'],['land','Land'],['warehouse','Warehouse'],['complex','Complex'],['shopping_mall','Shopping mall'],['hotel','Hotel'],['short_let','Short-let'],['school','School'],['hospital','Hospital'],['filling_station','Filling station'],['worship_center','Worship center'],['factory','Factory'],['multipurpose_hall','Multipurpose hall'],['custom','Other / custom']]} />
               <Field label="Custom property type (optional)" name="customType" placeholder="Describe the type"/><SelectField label="Listing intent" name="intent" options={[['sale','For sale'],['rent','For rent'],['lease','For lease'],['social','Shared housing']]} />
-              <Field label="State" name="state" required placeholder="Lagos"/><Field label="Town / city" name="town" required placeholder="Ikeja"/><Field label="Street address" name="address" placeholder="Street, estate or landmark"/><Field label="Price in naira" name="priceNaira" type="number" min={1} required placeholder="0"/><Field label="Price unit" name="priceUnit" placeholder="per year, total…"/><Field label="Bedrooms" name="bedrooms" type="number" min={0}/><Field label="Bathrooms" name="bathrooms" type="number" min={0}/><Field label="Size (m²)" name="sizeSqm" type="number" min={0}/><Field label="Latitude" name="latitude" type="number" step={0.000001} required placeholder="6.5244"/><Field label="Longitude" name="longitude" type="number" step={0.000001} required placeholder="3.3792"/><Field label="Image URL (optional)" name="imageUrl" placeholder="https://…"/><Field label="Premises rules URL (optional)" name="premisesRulesUrl" placeholder="https://…"/></div>
+               <Field label="State" name="state" required placeholder="Lagos"/><Field label="Town / city" name="town" required placeholder="Ikeja"/><Field label="Street address" name="address" placeholder="Street, estate or landmark"/><Field label="Price in naira" name="priceNaira" type="number" min={1} required placeholder="0"/><Field label="Price unit" name="priceUnit" placeholder="per year, total…"/><Field label="Bedrooms" name="bedrooms" type="number" min={0}/><Field label="Bathrooms" name="bathrooms" type="number" min={0}/><Field label="Size (m²)" name="sizeSqm" type="number" min={0}/><Field label="Image URL (optional)" name="imageUrl" placeholder="https://…"/><Field label="Premises rules URL (optional)" name="premisesRulesUrl" placeholder="https://…"/></div>
+            <PropertyLocationPicker latitude={listingCoordinates.latitude} longitude={listingCoordinates.longitude} onCoordinatesChange={(latitude, longitude) => setListingCoordinates({ latitude, longitude })}/>
             <PropertyPhotoCapture listingLatitude={listingCoordinates.latitude} listingLongitude={listingCoordinates.longitude} proof={propertyProof} onProofChange={setPropertyProof}/>
             {propertyProofError && <Notice tone="red">{propertyProofError}</Notice>}
             <TextArea label="Description" name="description" placeholder="Share the details a renter or buyer should know."/>
