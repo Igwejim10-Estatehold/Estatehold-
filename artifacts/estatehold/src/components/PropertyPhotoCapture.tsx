@@ -97,7 +97,7 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
       const blob = await (await fetch(withExif)).blob();
       const file = new File([blob], `estatehold-live-${date.getTime()}.jpg`, { type: 'image/jpeg', lastModified: date.getTime() });
       onProofChange({ file, latitude: coordinates.latitude, longitude: coordinates.longitude, takenAt: date.toISOString(), device });
-      setLocationMessage(`Auto-filled from photo location ✓ · Location captured: ${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)} ✓`);
+      setLocationMessage(`✓ Location captured: ${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)} (Auto-filled from photo location)`);
       streamRef.current?.getTracks().forEach(track => track.stop()); streamRef.current = null; setCameraReady(false);
     } catch { setError('Could not capture the live photo. Check camera permissions and try again.'); }
     finally { setBusy(false); }
