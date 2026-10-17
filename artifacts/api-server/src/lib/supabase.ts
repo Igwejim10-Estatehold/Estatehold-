@@ -81,16 +81,20 @@ export function getPublicConfig() {
   } catch (error) {
     if (!(error instanceof SupabaseRequestError) || error.code !== "INVALID_URL") throw error;
   }
+  const secretKey = process.env["PAYSTACK_SECRET_KEY"]?.trim() ?? "";
+  const publicKey = process.env["PAYSTACK_PUBLIC_KEY"]?.trim() ?? "";
+  const paymentMode =
+    secretKey.startsWith("sk_live_") && publicKey.startsWith("pk_live_")
+      ? "live"
+      : secretKey.startsWith("sk_test_") && publicKey.startsWith("pk_test_")
+        ? "test"
+        : "disabled";
   return {
     supabaseUrl,
     supabaseAnonKey: getSupabaseAnonKey(),
     googleMapsApiKey: process.env["GOOGLE_MAPS_API_KEY"] ?? "",
-    paystackPublicKey:
-      process.env["PAYSTACK_PUBLIC_KEY"] ??
-      "pk_test_e80fbdd42f4e9b967de0bcacbb0c09dd7",
-    paymentMode: process.env["PAYSTACK_SECRET_KEY"]?.startsWith("sk_test_")
-      ? "test"
-      : "disabled",
+    paystackPublicKey: paymentMode === "disabled" ? "" : publicKey,
+    paymentMode,
   } as const;
 }
 

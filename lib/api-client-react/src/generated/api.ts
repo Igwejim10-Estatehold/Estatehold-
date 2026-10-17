@@ -58,6 +58,7 @@ import type {
   ListSpecialRequests200,
   PaymentInput,
   PaymentResult,
+  PaymentStatus,
   PayoutBank,
   PayoutDestination,
   PayoutDestinationInput,
@@ -2807,7 +2808,7 @@ export const getInitializePaymentUrl = () => {
 }
 
 /**
- * @summary Initialize a Paystack test checkout
+ * @summary Initialize a Paystack checkout
  */
 export const initializePayment = async (paymentInput: PaymentInput, options?: Parameters<typeof customFetch>[1]): Promise<PaymentResult> => {
 
@@ -2873,7 +2874,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type InitializePaymentMutationVariables = {data: BodyType<PaymentInput>}
 
     /**
- * @summary Initialize a Paystack test checkout
+ * @summary Initialize a Paystack checkout
  */
 export const useInitializePayment = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof initializePayment>>, TError,InitializePaymentMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2885,6 +2886,83 @@ export const useInitializePayment = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getInitializePaymentMutationOptions(options));
     }
+
+export const getGetPaymentStatusUrl = (reference: string,) => {
+
+
+
+
+  return `/api/payments/status/${reference}`
+}
+
+/**
+ * @summary Get the authenticated buyer's payment and rental settlement status
+ */
+export const getPaymentStatus = async (reference: string, options?: Parameters<typeof customFetch>[1]): Promise<PaymentStatus> => {
+
+  return customFetch<PaymentStatus>(getGetPaymentStatusUrl(reference),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentStatusQueryKey = (reference: string,) => {
+    return [
+    `/api/payments/status/${reference}`
+    ] as const;
+    }
+
+
+export const getGetPaymentStatusQueryOptions = <TData = Awaited<ReturnType<typeof getPaymentStatus>>, TError = ErrorType<unknown>>(reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentStatusQueryKey(reference);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentStatus>>> = ({ signal }) => getPaymentStatus(reference, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: reference !== null && reference !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getPaymentStatus>>>
+export type GetPaymentStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get the authenticated buyer's payment and rental settlement status
+ */
+
+export function useGetPaymentStatus<TData = Awaited<ReturnType<typeof getPaymentStatus>>, TError = ErrorType<unknown>>(
+ reference: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentStatusQueryOptions(reference,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getReceivePaystackWebhookUrl = () => {
 

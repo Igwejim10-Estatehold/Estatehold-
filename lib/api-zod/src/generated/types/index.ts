@@ -78,6 +78,8 @@ export * from './listSpecialRequests200';
 export * from './paymentInput';
 export * from './paymentResult';
 export * from './paymentResultMode';
+export * from './paymentStatus';
+export * from './paymentStatusPaymentStatus';
 export * from './payoutBank';
 export * from './payoutDestination';
 export * from './payoutDestinationInput';

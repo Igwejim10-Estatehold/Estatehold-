@@ -55,7 +55,100 @@ function mapPayout(row: DbRow) {
 
 function getTransferSecret(): string | null {
   const key = process.env["PAYSTACK_SECRET_KEY"]?.trim();
-  return key?.startsWith("sk_") ? key : null;
+  return key?.startsWith("sk_test_") || key?.startsWith("sk_live_") ? key : null;
+}
+
+function configuredPaymentMode(secretKey: string): "test" | "live" | null {
+  const publicKey = process.env["PAYSTACK_PUBLIC_KEY"]?.trim() ?? "";
+  if (secretKey.startsWith("sk_live_") && publicKey.startsWith("pk_live_")) return "live";
+  if (secretKey.startsWith("sk_test_") && publicKey.startsWith("pk_test_")) return "test";
+  return null;
+}
+
+function paymentCallbackUrl(req: Parameters<typeof requireAuth>[0], reference: string): string {
+  const domains = (process.env["REPLIT_DOMAINS"] ?? "")
+    .split(",")
+    .map((domain) => domain.trim())
+    .filter(Boolean);
+  const domain = domains[0] ?? process.env["REPLIT_DEV_DOMAIN"]?.trim();
+  const origin = domain ? `https://${domain}` : `${req.protocol}://${req.get("host")}`;
+  const callback = new URL("/payment-status", origin);
+  callback.searchParams.set("reference", reference);
+  return callback.toString();
+}
+
+async function startRentPayout(
+  payoutId: string,
+  landlordId: string,
+  amountNaira: number,
+  reference: string,
+  secretKey: string,
+): Promise<void> {
+  const destination = await loadVerifiedPayoutDestination(landlordId);
+  if (!destination) return;
+  const setPayout = async (body: Record<string, unknown>) => {
+    await supabaseRest(`rental_payouts?id=eq.${encodeURIComponent(payoutId)}`, {
+      method: "PATCH",
+      body: { ...body, updated_at: new Date().toISOString() },
+      prefer: "return=minimal",
+    });
+  };
+  await setPayout({ status: "initiating" });
+  try {
+    const recipientResponse = await fetch("https://api.paystack.co/transferrecipient", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "nuban",
+        name: destination.accountName,
+        account_number: destination.accountNumber,
+        bank_code: destination.bankCode,
+        currency: "NGN",
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const recipient = (await recipientResponse.json().catch(() => null)) as
+      | { status?: boolean; data?: { recipient_code?: unknown } }
+      | null;
+    const recipientCode = recipient?.data?.recipient_code;
+    if (!recipientResponse.ok || !recipient?.status || typeof recipientCode !== "string") {
+      await setPayout({ status: "failed", provider_status: "recipient_creation_failed" });
+      return;
+    }
+    await setPayout({ recipient_code: recipientCode });
+    const transferResponse = await fetch("https://api.paystack.co/transfer", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: "balance",
+        amount: Math.round(amountNaira * 100),
+        recipient: recipientCode,
+        reason: "Estatehold full rental payment",
+        reference,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const transfer = (await transferResponse.json().catch(() => null)) as
+      | { status?: boolean; message?: unknown; data?: { status?: unknown; transfer_code?: unknown } }
+      | null;
+    if (!transferResponse.ok || !transfer?.status || !transfer.data) {
+      await setPayout({
+        status: "reconciliation_required",
+        provider_status: "transfer_response_unconfirmed",
+      });
+      return;
+    }
+    await setPayout({
+      status: providerState(transfer.data.status),
+      provider_status: String(transfer.data.status ?? "pending"),
+      transfer_code: typeof transfer.data.transfer_code === "string" ? transfer.data.transfer_code : null,
+    });
+  } catch {
+    await setPayout({
+      status: "reconciliation_required",
+      provider_status: "transfer_response_unconfirmed",
+    });
+  }
 }
 
 function providerState(status: unknown): "pending" | "success" | "failed" | "reversed" {
@@ -647,6 +740,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (!user) return;
 
   try {
+    const listingQuery = new URLSearchParams({
+      select: "id,owner_id,intent",
+      id: `eq.${parsed.data.propertyId}`,
+      limit: "1",
+    });
+    const listings = await supabaseRest<DbRow[]>(`properties?${listingQuery}`);
+    if (!listings[0] || listings[0]["owner_id"] === user.id) {
+      res.status(409).json({ message: "You cannot start a transaction for this listing." });
+      return;
+    }
     const result = await supabaseRpc<DbRow | DbRow[]>("create_estatehold_transaction", {
       p_property_id: parsed.data.propertyId,
       p_buyer_id: user.id,
@@ -688,8 +791,9 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
   const user = await requireUser(req, res);
   if (!user) return;
   const secretKey = process.env["PAYSTACK_SECRET_KEY"] ?? "";
-  if (!secretKey.startsWith("sk_test_")) {
-    res.status(503).json({ message: "Paystack checkout is available only after a test key is configured." });
+  const mode = configuredPaymentMode(secretKey);
+  if (!mode) {
+    res.status(503).json({ message: "Paystack keys are missing or do not match." });
     return;
   }
   if (!user.email) {
@@ -698,7 +802,7 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
   }
 
   const params = new URLSearchParams({
-    select: "*",
+    select: "*,properties(owner_id,intent)",
     id: `eq.${parsed.data.transactionId}`,
     buyer_id: `eq.${user.id}`,
     status: "eq.pending",
@@ -709,6 +813,25 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
   if (!transaction) {
     res.status(404).json({ message: "Pending transaction not found." });
     return;
+  }
+  const propertyRelation = transaction["properties"] as DbRow | null;
+  if (
+    propertyRelation?.["intent"] === "rent" &&
+    transaction["payment_mode"] === "full" &&
+    Number(transaction["installment_count"]) === 1
+  ) {
+    const ownerId = String(propertyRelation["owner_id"] ?? "");
+    let destination: Awaited<ReturnType<typeof loadVerifiedPayoutDestination>>;
+    try {
+      destination = await loadVerifiedPayoutDestination(ownerId);
+    } catch {
+      res.status(503).json({ message: "The landlord payout account could not be verified right now." });
+      return;
+    }
+    if (!destination) {
+      res.status(409).json({ message: "The landlord must link and verify a Paystack payout account before rent checkout." });
+      return;
+    }
   }
 
   let amountNaira = Number(transaction["buyer_total_naira"]);
@@ -761,6 +884,7 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
         amount: amountNaira * 100,
         currency: "NGN",
         reference,
+        callback_url: paymentCallbackUrl(req, reference),
         metadata: {
           estateholdTransactionId: String(transaction["id"]),
           installmentNumber: installmentRow ? 1 : null,
@@ -771,7 +895,7 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
       | { status?: boolean; data?: { authorization_url?: string; reference?: string } }
       | null;
     if (!paystackResponse.ok || !paystackResult?.data?.authorization_url) {
-      req.log.warn({ status: paystackResponse.status }, "Paystack test checkout initialization failed");
+      req.log.warn({ status: paystackResponse.status, mode }, "Paystack checkout initialization failed");
       res.status(502).json({ message: "Paystack could not start checkout. Try again later." });
       return;
     }
@@ -799,9 +923,41 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
     InitializePaymentResponse.parse({
       reference,
       authorizationUrl,
-      mode: "test",
+      mode,
     }),
   );
+});
+
+router.get("/payments/status/:reference", requireAuth, async (req, res): Promise<void> => {
+  const reference = String(req.params["reference"] ?? "");
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if (!reference || reference.length > 100) {
+    res.status(400).json({ message: "Invalid payment reference." });
+    return;
+  }
+  const query = new URLSearchParams({
+    select: "id,status,payment_mode,properties(intent,rental_status)",
+    paystack_reference: `eq.${reference}`,
+    buyer_id: `eq.${user.id}`,
+    limit: "1",
+  });
+  const transactions = await supabaseRest<DbRow[]>(`transactions?${query}`);
+  const transaction = transactions[0];
+  if (!transaction) {
+    res.status(404).json({ message: "Payment record not found for this account." });
+    return;
+  }
+  const payoutRows = await supabaseRest<DbRow[]>(
+    `rental_payouts?transaction_id=eq.${encodeURIComponent(String(transaction["id"]))}&select=status&limit=1`,
+  );
+  const property = transaction["properties"] as DbRow | null;
+  res.json({
+    paymentStatus: String(transaction["status"]),
+    rentalStatus: property?.["rental_status"] ?? null,
+    settlementStatus: payoutRows[0]?.["status"] ?? null,
+    isRent: property?.["intent"] === "rent",
+  });
 });
 
 function signaturesMatch(received: string, expected: string): boolean {
@@ -822,7 +978,7 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
   if (
     !parsedHeaders.success ||
     !parsedBody.success ||
-    !secretKey.startsWith("sk_test_") ||
+    !configuredPaymentMode(secretKey) ||
     !req.rawBody
   ) {
     res.status(400).json({ message: "Invalid Paystack webhook request." });
@@ -843,6 +999,30 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
   const reference = event.data.reference;
   if (!reference || typeof event.data.amount !== "number") {
     res.status(400).json({ message: "Paystack event is missing payment details." });
+    return;
+  }
+  let verifiedResponse: Response;
+  try {
+    verifiedResponse = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      { headers: { Authorization: `Bearer ${secretKey}` }, signal: AbortSignal.timeout(15_000) },
+    );
+  } catch {
+    res.status(502).json({ message: "Paystack could not verify this payment yet." });
+    return;
+  }
+  const verified = (await verifiedResponse.json().catch(() => null)) as
+    | { status?: boolean; data?: { status?: unknown; reference?: unknown; amount?: unknown; currency?: unknown } }
+    | null;
+  if (
+    !verifiedResponse.ok ||
+    !verified?.status ||
+    verified.data?.status !== "success" ||
+    verified.data.reference !== reference ||
+    verified.data.currency !== "NGN" ||
+    Number(verified.data.amount) !== event.data.amount
+  ) {
+    res.status(400).json({ message: "Paystack verification did not match the payment event." });
     return;
   }
 
@@ -898,7 +1078,7 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
   }
 
   const query = new URLSearchParams({
-    select: "*",
+    select: "*,properties(owner_id,intent)",
     paystack_reference: `eq.${reference}`,
     limit: "1",
   });
@@ -915,6 +1095,32 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
   }
   if (Number(event.data.amount) !== Number(transaction["buyer_total_naira"]) * 100) {
     res.status(400).json({ message: "Payment amount did not match the transaction." });
+    return;
+  }
+
+  const property = transaction["properties"] as DbRow | null;
+  if (
+    property?.["intent"] === "rent" &&
+    transaction["payment_mode"] === "full" &&
+    Number(transaction["installment_count"]) === 1
+  ) {
+    const transferReference = `EHR-${randomUUID()}`;
+    const claimed = await supabaseRpc<DbRow | DbRow[]>("complete_rental_payment", {
+      p_transaction_id: String(transaction["id"]),
+      p_reference: reference,
+      p_transfer_reference: transferReference,
+    });
+    const payout = Array.isArray(claimed) ? claimed[0] : claimed;
+    if (payout?.["is_new"] === true) {
+      await startRentPayout(
+        String(payout["payout_id"]),
+        String(payout["landlord_id"]),
+        Number(payout["amount_naira"]),
+        transferReference,
+        secretKey,
+      );
+    }
+    res.json({ received: true });
     return;
   }
 

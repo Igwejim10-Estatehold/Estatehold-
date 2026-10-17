@@ -691,7 +691,7 @@ paths:
     post:
       operationId: initializePayment
       tags: [payments]
-      summary: Initialize a Paystack test checkout
+      summary: Initialize a Paystack checkout
       security:
         - bearerAuth: []
       requestBody:
@@ -707,6 +707,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PaymentResult"
+  /payments/status/{reference}:
+    get:
+      operationId: getPaymentStatus
+      tags: [payments]
+      summary: Get the authenticated buyer's payment and rental settlement status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: reference
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Payment and landlord settlement status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentStatus"
   /payments/webhook:
     post:
       operationId: receivePaystackWebhook
@@ -1092,7 +1111,7 @@ components:
           type: string
         paymentMode:
           type: string
-          enum: [test, disabled]
+          enum: [test, live, disabled]
     PropertyCategory:
       type: string
       enum: [land, home, warehouse, complex, shopping_mall, hotel, short_let, school, hospital, filling_station, worship_center, factory, multipurpose_hall, custom]
@@ -1501,7 +1520,15 @@ components:
       properties:
         reference: { type: string }
         authorizationUrl: { type: string }
-        mode: { type: string, enum: [test] }
+        mode: { type: string, enum: [test, live] }
+    PaymentStatus:
+      type: object
+      required: [paymentStatus, rentalStatus, settlementStatus, isRent]
+      properties:
+        paymentStatus: { type: string, enum: [pending, paid, completed, cancelled] }
+        rentalStatus: { type: ["string", "null"] }
+        settlementStatus: { type: ["string", "null"] }
+        isRent: { type: boolean }
     AgreementInput:
       type: object
       required: [propertyId, tenantName, landlordName, rentNaira, paymentMode, mediationAccepted]

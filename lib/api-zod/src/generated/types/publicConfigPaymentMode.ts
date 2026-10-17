@@ -11,5 +11,6 @@ export type PublicConfigPaymentMode = typeof PublicConfigPaymentMode[keyof typeo
 
 export const PublicConfigPaymentMode = {
   test: 'test',
+  live: 'live',
   disabled: 'disabled',
 } as const;

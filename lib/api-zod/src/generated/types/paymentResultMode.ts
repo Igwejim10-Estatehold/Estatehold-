@@ -11,4 +11,5 @@ export type PaymentResultMode = typeof PaymentResultMode[keyof typeof PaymentRes
 
 export const PaymentResultMode = {
   test: 'test',
+  live: 'live',
 } as const;

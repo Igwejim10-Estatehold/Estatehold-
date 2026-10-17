@@ -37,7 +37,7 @@ export const GetPublicConfigResponse = zod.object({
   "supabaseAnonKey": zod.string(),
   "googleMapsApiKey": zod.string(),
   "paystackPublicKey": zod.string(),
-  "paymentMode": zod.enum(['test', 'disabled'])
+  "paymentMode": zod.enum(['test', 'live', 'disabled'])
 })
 
 
@@ -1000,7 +1000,7 @@ export const CalculateInstallmentsResponse = zod.object({
 
 
 /**
- * @summary Initialize a Paystack test checkout
+ * @summary Initialize a Paystack checkout
  */
 export const InitializePaymentBody = zod.object({
   "transactionId": zod.string()
@@ -1009,7 +1009,22 @@ export const InitializePaymentBody = zod.object({
 export const InitializePaymentResponse = zod.object({
   "reference": zod.string(),
   "authorizationUrl": zod.string(),
-  "mode": zod.enum(['test'])
+  "mode": zod.enum(['test', 'live'])
+})
+
+
+/**
+ * @summary Get the authenticated buyer's payment and rental settlement status
+ */
+export const GetPaymentStatusParams = zod.object({
+  "reference": zod.coerce.string()
+})
+
+export const GetPaymentStatusResponse = zod.object({
+  "paymentStatus": zod.enum(['pending', 'paid', 'completed', 'cancelled']),
+  "rentalStatus": zod.string().nullable(),
+  "settlementStatus": zod.string().nullable(),
+  "isRent": zod.boolean()
 })
 
 

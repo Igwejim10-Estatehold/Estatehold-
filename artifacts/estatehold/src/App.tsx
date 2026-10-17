@@ -16,7 +16,7 @@ import {
   useListAdminLandlordKycQueue, useListAdminPropertyQueue, useReviewLandlordKyc,
   useCreateComplaint, useCreateProperty, useCreateSpecialRequest, useCreateTenancyAgreement, useGetAdminDashboard,
   getGetPayoutBanksQueryKey, getGetPayoutDestinationQueryKey, useGetPayoutBanks, useGetPayoutDestination,
-  useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment,
+   useSavePayoutDestination, useGetDashboard, useGetProfile, useGetProperty, useGetPublicConfig, useHealthCheck, useInitializePayment, useCreateTransaction,
   useListComplaints, useListProperties, useListSocialHousingUnits, useListSpecialRequests, useReleaseEscrow,
    useRequestPropertyDelisting, useUpdateProfile, useUpdateProperty,
 } from '@workspace/api-client-react';
@@ -350,6 +350,7 @@ function AppContent() {
   const calculateFees = useCalculateFees();
   const calculateInstallments = useCalculateInstallments();
   const initializePayment = useInitializePayment();
+  const createTransaction = useCreateTransaction();
   const createAgreement = useCreateTenancyAgreement();
   const delisting = useRequestPropertyDelisting();
   const releaseEscrow = useReleaseEscrow();
@@ -358,6 +359,18 @@ function AppContent() {
   const [feeQuote, setFeeQuote] = useState<FeeQuote | null>(null);
   const [installmentQuote, setInstallmentQuote] = useState<InstallmentQuote | null>(null);
   const [paymentResult, setPaymentResult] = useState<{ reference: string; authorizationUrl: string; mode: string } | null>(null);
+  const beginRentCheckout = (propertyId: string) => {
+    if (!authSession) {
+      navigate('/sign-in');
+      return;
+    }
+    createTransaction.mutate({ data: { propertyId, paymentMode: 'full' } }, {
+      onSuccess: transaction => initializePayment.mutate(
+        { data: { transactionId: transaction.id } },
+        { onSuccess: checkout => window.location.assign(checkout.authorizationUrl) },
+      ),
+    });
+  };
   const [createdAgreement, setCreatedAgreement] = useState<{ id: string; reviewNotice: string } | null>(null);
   const [authError, setAuthError] = useState('');
   const [agentFormError, setAgentFormError] = useState('');
@@ -658,8 +671,11 @@ function AppContent() {
               <div className="mt-6"><Notice>Estatehold checks location pins and makes tenant-protection status visible. Always inspect and confirm terms before making a commitment.</Notice></div>
               {p.premisesRulesUrl && <a href={p.premisesRulesUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#28763d]"><FileText size={15}/>View premises rules</a>}</div></div>
             <aside className="h-fit rounded-3xl border border-[#e3e9e2] bg-white p-6"><p className="font-display text-3xl font-extrabold">{money(p.priceNaira)}</p><p className="mt-1 text-sm text-[#748077]">{p.priceUnit || (p.intent === 'rent' ? 'per year' : p.intent)}</p>
-               <div className="mt-5 space-y-3">{authSession && <Link href={`/property/${p.id}/edit`} className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Edit listing</Link>}<Link href="/wallet" className="flex min-h-12 items-center justify-center rounded-xl bg-[#0B0F0E] px-4 text-sm font-bold text-white">Review fees & checkout</Link><Link href="/tenancy-agreement" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Prepare tenancy draft</Link></div>
-              <p className="mt-4 flex items-center gap-2 text-xs leading-5 text-[#718077]"><LockKeyhole size={14}/>Payments stay in test mode. Escrow release is disabled pending compliance approval.</p>
+               <div className="mt-5 space-y-3">{authSession && <Link href={`/property/${p.id}/edit`} className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Edit listing</Link>}
+                 {p.intent === 'rent' && <Button onClick={() => beginRentCheckout(p.id)} disabled={!authSession || config.data?.paymentMode === 'disabled' || createTransaction.isPending || initializePayment.isPending} testId="button-pay-rent">{createTransaction.isPending || initializePayment.isPending ? 'Starting secure checkout…' : 'Pay rent securely'}</Button>}
+                 <Link href="/wallet" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Review fees & checkout</Link><Link href="/tenancy-agreement" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Prepare tenancy draft</Link></div>
+               {(createTransaction.isError || initializePayment.isError) && <Notice tone="red">Checkout could not start. Confirm your account is signed in and the landlord has a verified payout account, then retry.</Notice>}
+               <p className="mt-4 flex items-center gap-2 text-xs leading-5 text-[#718077]"><LockKeyhole size={14}/>{config.data?.paymentMode === 'live' ? 'Payments are processed securely by Paystack. Full rent is transferred to the landlord’s verified account; sale and installment payments remain in escrow.' : 'Secure checkout is unavailable until matching Paystack keys are configured.'}</p>
               <Button variant="outline" onClick={() => { if (confirm('Request an operations review to delist this property?')) delisting.mutate({ propertyId: p.id }, { onSuccess: () => { refresh(getGetPropertyQueryKey(p.id)); refresh(getListPropertiesQueryKey(propertyFilters)); refresh(getGetDashboardQueryKey()); statusMessage('Delisting review requested.') } }); }} disabled={delisting.isPending} testId="button-request-delist" >{delisting.isPending ? 'Sending…' : 'Request review to delist'}</Button>
             </aside></div></>}
       </div>;
@@ -782,6 +798,8 @@ function AppContent() {
             {createComplaint.isError && <Notice tone="red">We couldn’t lodge this complaint. Please try again.</Notice>}<Button type="submit" disabled={createComplaint.isPending}>{createComplaint.isPending ? 'Submitting…' : 'Submit complaint'} <ArrowRight size={15}/></Button></form></div>;
       case '/wallet':
         return <WalletPage quote={feeQuote} onQuote={setFeeQuote} calc={calculateFees} payment={initializePayment} paymentResult={paymentResult} setPayment={setPaymentResult} onConfirmEscrow={confirmEscrowHandover} canConfirmEscrow={!!authSession} />;
+      case '/payment-status':
+        return <PaymentStatusPage accessToken={authSession?.access_token}/>;
       case '/installment-calculator':
         return <InstallmentPage quote={installmentQuote} onQuote={setInstallmentQuote} calc={calculateInstallments} canApplyForLoan={profile.data?.role==='represented_tenant'}/>;
       case '/profile':
@@ -917,11 +935,53 @@ function ProcessingFeesPage({ query }: { query: UseQueryResult<ProcessingFeeSche
     {query.isLoading?<LoadingCard/>:query.isError?<ErrorState onRetry={()=>query.refetch()}/>:<div className="grid gap-4 md:grid-cols-2"><section className="rounded-3xl border border-[#e4eae3] bg-white p-6"><h2 className="font-display text-xl font-extrabold">Standard property listings</h2><p className="mt-2 text-sm text-[#718077]">{(schedule?.standardCategories||[]).join(', ')}.</p><p className="mt-5 font-display text-3xl font-extrabold">{money(schedule?.standardListingFeeNaira)} <span className="font-sans text-sm font-semibold text-[#718077]">per property</span></p></section>
     <section className="rounded-3xl border border-[#e4eae3] bg-white p-6"><h2 className="font-display text-xl font-extrabold">Institutional listings</h2><p className="mt-2 text-sm text-[#718077]">{(schedule?.institutionalCategories||[]).join(', ')}.</p><p className="mt-5 font-display text-2xl font-extrabold">{money(schedule?.institutionalListingFeeNaira)} <span className="font-sans text-sm font-semibold">listing processing</span></p><p className="mt-2 font-semibold text-[#526a58]">Plus {money(schedule?.institutionalYearlyServiceChargeNaira)} yearly service charge</p></section>
     <section className="rounded-3xl border border-[#e4eae3] bg-white p-6 md:col-span-2"><h2 className="font-display text-xl font-extrabold">Hotel room bookings</h2><p className="mt-2 text-sm text-[#718077]">Hotel listing processing fee: {money(schedule?.hotelListingFeeNaira)}. Total commission: {Number(schedule?.hotelOwnerCommissionPercent||0)+Number(schedule?.guestCommissionPercent||0)}% of each room booking.</p><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-[#f3f7f2] p-4"><b>{schedule?.hotelOwnerCommissionPercent}% deducted from owner payout</b></div><div className="rounded-xl bg-[#f3f7f2] p-4"><b>{schedule?.guestCommissionPercent}% charged to guest/customer</b></div></div></section></div>}
-    <Notice tone="amber">The fee schedule is served by the backend. Paystack collection and settlement remain test-only until configured and verified.</Notice></div>;
+    <Notice tone="amber">The fee schedule is served by the backend. Paystack handles checkout; full rent uses a verified landlord payout account, while sales and installment payments remain in escrow.</Notice></div>;
 }
 function OfficesPage({apiKey,mapsState}:{apiKey?:string;mapsState:'missing'|'loading'|'ready'|'failed'}) {
   return <div className="space-y-6"><PageIntro eyebrow="Local support" title="Estatehold Offices Near You" text="Find a corporate Estatehold office and its support hours."/>
     <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]"><section className="min-h-[380px] overflow-hidden rounded-3xl border border-[#dce5dd] bg-[#e8eee5]"><EstateholdMap googleMapsKey={apiKey} googleMapsState={mapsState}/></section><div className="rounded-3xl border border-[#e4eae3] bg-white p-6"><h2 className="font-display text-xl font-extrabold">Office locations</h2><div className="mt-4 rounded-2xl bg-[#f4f8f3] p-4"><h3 className="font-bold">Estatehold HQ - Emene</h3><p className="mt-1 text-sm text-[#718077]">Emene, Enugu State</p><p className="mt-1 text-xs text-[#718077]">6.4776, 7.5458</p></div><p className="mt-4 text-sm leading-6 text-[#718077]">Office phone number and support hours have not been provided yet.</p></div></div>
+  </div>;
+}
+function PaymentStatusPage({ accessToken }: { accessToken?: string }) {
+  const reference = new URLSearchParams(window.location.search).get('reference') || '';
+  const [result, setResult] = useState<{ paymentStatus: string; rentalStatus: string | null; settlementStatus: string | null; isRent: boolean } | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!accessToken || !reference) return;
+    let active = true;
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/payments/status/${encodeURIComponent(reference)}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.message || 'Payment status is not available.');
+        if (active) { setResult(payload); setError(''); }
+        attempts += 1;
+        if (payload.paymentStatus === 'pending' && attempts < 15) window.setTimeout(poll, 2500);
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : 'Payment status is not available.');
+      }
+    };
+    void poll();
+    return () => { active = false; };
+  }, [accessToken, reference]);
+  if (!accessToken) return <div className="mx-auto max-w-2xl space-y-4"><PageIntro eyebrow="Payment status" title="Sign in to check your payment" text="Sign in with the account used to start checkout."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link></div>;
+  return <div className="mx-auto max-w-2xl space-y-5"><PageIntro eyebrow="Paystack checkout" title="Payment status" text={reference ? `Reference: ${reference}` : 'No Paystack reference was provided.'}/>
+    {!reference ? <Notice tone="red">We could not find a payment reference. Return to the listing and retry checkout.</Notice> :
+      error ? <Notice tone="amber">{error} Payment status may take a moment to update.</Notice> :
+      !result ? <LoadingCard/> :
+      result.paymentStatus === 'paid' && result.isRent ?
+        <section className="rounded-3xl border border-[#cae7d0] bg-[#f1faf2] p-6"><div className="flex items-center gap-2 font-bold text-[#28663b]"><Check size={18}/>Payment verified</div>
+          <h2 className="mt-4 font-display text-xl font-extrabold">Payment verified, settlement to landlord's account in T+1</h2>
+          <p className="mt-2 text-sm leading-6 text-[#63746a]">Settlement status: {(result.settlementStatus || 'processing').replaceAll('_', ' ')}. Transfer timing depends on Paystack settlement and transfer processing.</p>
+          <p className="mt-2 text-sm text-[#63746a]">Listing status: {(result.rentalStatus || 'updating').replaceAll('_', ' ')}.</p>
+        </section> :
+      result.paymentStatus === 'paid' ?
+        <Notice>Payment verified. Sale and installment payments remain in escrow until the required release steps are complete.</Notice> :
+        <Notice tone="amber">We are waiting for Paystack to confirm this payment. Do not pay again while it is being checked.</Notice>}
+    <Link href="/browse" className="inline-flex items-center gap-2 text-sm font-bold text-[#18783a]"><ArrowLeft size={15}/>Return to listings</Link>
   </div>;
 }
 function WalletPage({ quote, onQuote, calc, payment, paymentResult, setPayment, onConfirmEscrow, canConfirmEscrow }: { quote: FeeQuote|null; onQuote: (q:FeeQuote|null)=>void; calc: ReturnType<typeof useCalculateFees>; payment: ReturnType<typeof useInitializePayment>; paymentResult: {reference:string;authorizationUrl:string;mode:string}|null; setPayment:(v:{reference:string;authorizationUrl:string;mode:string}|null)=>void; onConfirmEscrow:(transactionId:string)=>Promise<void>; canConfirmEscrow:boolean }) {
@@ -952,7 +1012,7 @@ function WalletPage({ quote, onQuote, calc, payment, paymentResult, setPayment, 
     </form>
     <section className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e8f5e9] text-[#26723a]"><Wallet size={20}/></div><h2 className="font-display text-xl font-extrabold">Test checkout</h2><p className="text-sm leading-6 text-[#718077]">Initialize a simulated payment from an existing Estatehold transaction.</p><Field label="Transaction ID" name="transactionId" required placeholder="Enter an existing transaction ID"/>
       <Button onClick={()=>{const id=(document.querySelector('[data-testid=\"input-transactionId\"]') as HTMLInputElement)?.value.trim();if(!id)return;payment.mutate({data:{transactionId:id}},{onSuccess:r=>setPayment(r)});}} disabled={payment.isPending}>{payment.isPending?'Starting test checkout…':'Initialize test payment'} <ArrowRight size={15}/></Button>
-      {payment.isError && <Notice tone="red">Payment initialization did not complete. Try again.</Notice>}{paymentResult && <div className="rounded-xl border border-[#cce5d0] bg-[#f1faf2] p-4 text-sm"><div className="flex items-center gap-2 font-bold text-[#28663b]"><Check size={16}/>Test payment ready</div><p className="mt-2 text-xs text-[#63746a]">Reference: {paymentResult.reference} · Mode: {paymentResult.mode}</p><a href={paymentResult.authorizationUrl} className="mt-3 inline-block font-bold text-[#16783a] underline">Continue to test authorization</a></div>}
+      {payment.isError && <Notice tone="red">Payment initialization did not complete. Try again.</Notice>}{paymentResult && <div className="rounded-xl border border-[#cce5d0] bg-[#f1faf2] p-4 text-sm"><div className="flex items-center gap-2 font-bold text-[#28663b]"><Check size={16}/>{paymentResult.mode === 'live' ? 'Secure live checkout ready' : 'Test payment ready'}</div><p className="mt-2 text-xs text-[#63746a]">Reference: {paymentResult.reference} · Mode: {paymentResult.mode}</p><a href={paymentResult.authorizationUrl} className="mt-3 inline-block font-bold text-[#16783a] underline">Continue to Paystack checkout</a></div>}
      </section>
      <section className="space-y-4 rounded-3xl border border-[#e4eae3] bg-white p-5 sm:p-7"><div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#f4f2e8] text-[#856c2d]"><LockKeyhole size={20}/></div><h2 className="font-display text-xl font-extrabold">Confirm completed handover</h2><p className="text-sm leading-6 text-[#718077]">Only the buyer can confirm that execution, required documentation, and handover are complete. This confirmation is one of the checks required before an administrator can release escrow.</p><form onSubmit={submitEscrowConfirmation} className="space-y-4"><Field label="Transaction ID" name="escrowTransactionId" required placeholder="Enter the paid transaction ID"/><label className="flex items-start gap-3 text-sm leading-5 text-[#46564a]"><input name="handoverConfirmed" type="checkbox" required className="mt-1 h-4 w-4 accent-[#18783a]"/><span>I confirm the transaction execution, required documentation, and handover are complete.</span></label>{escrowConfirmError&&<Notice tone="red">{escrowConfirmError}</Notice>}{escrowConfirmSuccess&&<Notice>Buyer confirmation recorded. Escrow remains held until an administrator reviews and releases it.</Notice>}<Button type="submit" disabled={!canConfirmEscrow||escrowConfirming}>{escrowConfirming?'Recording confirmation…':'Confirm handover'}</Button>{!canConfirmEscrow&&<p className="text-xs text-[#8c6c39]">Sign in as the buyer to confirm a paid transaction.</p>}</form></section>
      </div></div>;
@@ -1029,7 +1089,7 @@ function Router() {
   return <RoutedErrorBoundary><Switch>
     <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/construction"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id/edit"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
-    <Route path="/wallet"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
+    <Route path="/wallet"><AppContent/></Route><Route path="/payment-status"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
     <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }

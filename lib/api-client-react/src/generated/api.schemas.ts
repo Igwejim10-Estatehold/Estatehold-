@@ -28,6 +28,7 @@ export type PublicConfigPaymentMode = typeof PublicConfigPaymentMode[keyof typeo
 
 export const PublicConfigPaymentMode = {
   test: 'test',
+  live: 'live',
   disabled: 'disabled',
 } as const;
 
@@ -803,12 +804,32 @@ export type PaymentResultMode = typeof PaymentResultMode[keyof typeof PaymentRes
 
 export const PaymentResultMode = {
   test: 'test',
+  live: 'live',
 } as const;
 
 export interface PaymentResult {
   reference: string;
   authorizationUrl: string;
   mode: PaymentResultMode;
+}
+
+export type PaymentStatusPaymentStatus = typeof PaymentStatusPaymentStatus[keyof typeof PaymentStatusPaymentStatus];
+
+
+export const PaymentStatusPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  completed: 'completed',
+  cancelled: 'cancelled',
+} as const;
+
+export interface PaymentStatus {
+  paymentStatus: PaymentStatusPaymentStatus;
+  /** @nullable */
+  rentalStatus: string | null;
+  /** @nullable */
+  settlementStatus: string | null;
+  isRent: boolean;
 }
 
 export type AgreementInputPaymentMode = typeof AgreementInputPaymentMode[keyof typeof AgreementInputPaymentMode];
