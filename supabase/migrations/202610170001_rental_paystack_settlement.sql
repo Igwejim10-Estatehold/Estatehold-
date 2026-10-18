@@ -8,7 +8,7 @@ create table if not exists public.rental_payouts (
   landlord_id uuid not null references public.profiles(id) on delete restrict,
   amount_naira bigint not null check (amount_naira > 0),
   status text not null default 'awaiting_destination'
-    check (status in ('awaiting_destination', 'initiating', 'pending', 'success', 'failed', 'reconciliation_required')),
+    check (status in ('awaiting_destination', 'initiating', 'pending', 'success', 'failed', 'reversed', 'reconciliation_required')),
   transfer_reference text not null unique,
   recipient_code text,
   transfer_code text,

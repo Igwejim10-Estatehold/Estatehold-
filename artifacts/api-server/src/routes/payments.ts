@@ -992,6 +992,36 @@ router.post("/payments/webhook", async (req, res): Promise<void> => {
   }
 
   const event = parsedBody.data;
+  if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event)) {
+    const transferReference = event.data.reference;
+    if (!transferReference) {
+      res.status(400).json({ message: "Paystack transfer event is missing its reference." });
+      return;
+    }
+    const payoutQuery = new URLSearchParams({
+      select: "id",
+      transfer_reference: `eq.${transferReference}`,
+      limit: "1",
+    });
+    const payouts = await supabaseRest<DbRow[]>(`rental_payouts?${payoutQuery}`);
+    const payout = payouts[0];
+    if (payout) {
+      const status = event.event === "transfer.success"
+        ? "success"
+        : event.event === "transfer.reversed" ? "reversed" : "failed";
+      await supabaseRest(`rental_payouts?id=eq.${encodeURIComponent(String(payout["id"]))}`, {
+        method: "PATCH",
+        body: {
+          status,
+          provider_status: String(event.data.status ?? status),
+          updated_at: new Date().toISOString(),
+        },
+        prefer: "return=minimal",
+      });
+    }
+    res.json({ received: true });
+    return;
+  }
   if (event.event !== "charge.success") {
     res.json({ received: true });
     return;
