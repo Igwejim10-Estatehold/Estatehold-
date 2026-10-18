@@ -14,11 +14,13 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:exif": "tsx --test src/lib/exifGps.test.ts",
     "test:construction": "tsx --test src/pages/construction-tabs.test.ts",
-    "test:dashboard-access": "tsx --test src/lib/dashboard-access.test.ts"
+    "test:dashboard-access": "tsx --test src/lib/dashboard-access.test.ts",
+    "test:browser": "playwright test --config playwright.config.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.6.9",
     "@hookform/resolvers": "^3.10.0",
+    "@playwright/test": "^1.64.1",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",
     "@radix-ui/react-aspect-ratio": "^1.1.3",
