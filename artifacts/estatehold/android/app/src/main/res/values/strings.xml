@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Estatehold</string>
+    <string name="title_activity_main">Estatehold</string>
+    <string name="package_name">com.estatehold.app</string>
+    <string name="custom_url_scheme">com.estatehold.app</string>
+</resources>

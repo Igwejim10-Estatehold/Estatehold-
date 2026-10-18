@@ -32,6 +32,11 @@ node_modules
 /connect.lock
 /coverage
 /libpeerconnection.log
+/artifacts/estatehold/android/key.properties
+/artifacts/estatehold/android/*.jks
+/artifacts/estatehold/android/*.keystore
+/artifacts/estatehold/android/app/release/
+/artifacts/estatehold/android/app/build/outputs/
 npm-debug.log
 yarn-error.log
 testem.log

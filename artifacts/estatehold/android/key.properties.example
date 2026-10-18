@@ -1,0 +1,6 @@
+# Copy to key.properties and replace the placeholders with your local keystore values.
+# Never commit key.properties or the keystore file.
+storeFile=estatehold-upload-key.jks
+storePassword=REPLACE_WITH_YOUR_STORE_PASSWORD
+keyAlias=estatehold
+keyPassword=REPLACE_WITH_YOUR_KEY_PASSWORD
