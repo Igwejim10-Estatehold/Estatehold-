@@ -24,7 +24,14 @@ import {
   type DbRow,
 } from "../lib/estatehold";
 import { readBoundedPhotoBody, validateStoredPropertyPhotoExif } from "../lib/property-photo-exif";
-import { fetchPrivatePropertyPhoto, getPublicConfig, SupabaseRequestError, supabaseRest } from "../lib/supabase";
+import {
+  deletePrivatePropertyPhoto,
+  fetchPrivatePropertyPhoto,
+  getPublicConfig,
+  SupabaseRequestError,
+  supabaseRest,
+} from "../lib/supabase";
+import { cleanupUnreferencedPropertyPhoto } from "../lib/property-photo-cleanup";
 
 const router: IRouter = Router();
 
@@ -251,13 +258,38 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
   if (!property) { res.status(404).json({ message: "Property not found." }); return; }
   if (property["owner_id"] !== user.id) { res.status(403).json({ message: "Only the listing owner can attach a verification photo." }); return; }
   const photoPath = parsed.data.photoUrl;
-  if (!photoPath.startsWith(`${user.id}/property-verification/${propertyId}/`) || !photoPath.endsWith(".jpg")) {
+  const photoFolder = `${user.id}/property-verification/${propertyId}/`;
+  const photoFileName = photoPath.startsWith(photoFolder) ? photoPath.slice(photoFolder.length) : "";
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jpg$/i.test(photoFileName)) {
     res.status(400).json({ message: "The photo must be in your private property-verification folder." });
     return;
   }
+  const cleanupRejectedUpload = async (): Promise<void> => {
+    const result = await cleanupUnreferencedPropertyPhoto(
+      async () => {
+        const references = await supabaseRest<DbRow[]>(
+          `property_photos?photo_url=eq.${encodeURIComponent(photoPath)}&select=id&limit=1`,
+        );
+        return references.length > 0;
+      },
+      async () => {
+        const deletion = await deletePrivatePropertyPhoto(photoPath);
+        if (!deletion.ok && deletion.status !== 404) {
+          throw new Error(`Private photo removal failed (${deletion.status}).`);
+        }
+      },
+    );
+    if (result === "failed") {
+      req.log.warn(
+        { propertyId },
+        "Could not clean up rejected property verification photo; preserving verification response",
+      );
+    }
+  };
   const takenAt = parsed.data.takenAt.getTime();
   const ageMs = Date.now() - takenAt;
   if (!Number.isFinite(takenAt) || ageMs < -60_000 || ageMs > 30 * 60_000) {
+    await cleanupRejectedUpload();
     res.status(400).json({ message: "Capture a fresh live photo before submitting." });
     return;
   }
@@ -278,6 +310,7 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
   }
   const contentType = (storedPhoto.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase();
   if (contentType !== "image/jpeg") {
+    await cleanupRejectedUpload();
     res.status(422).json({ message: "The stored verification photo is not a JPEG. Retake and upload the photo again." });
     return;
   }
@@ -289,6 +322,7 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
     return;
   }
   if (!storedImage) {
+    await cleanupRejectedUpload();
     res.status(413).json({ message: "The verification photo is too large. Retake it at a lower image size." });
     return;
   }
@@ -298,6 +332,7 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
     takenAt: parsed.data.takenAt,
   });
   if (!exifValidation.valid) {
+    await cleanupRejectedUpload();
     res.status(422).json({ message: exifValidation.message });
     return;
   }
@@ -307,6 +342,7 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(Number(property["gps_lat"]) * rad) * Math.cos(parsed.data.latitude * rad) * Math.sin(dLng / 2) ** 2;
   const distanceMeters = 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   if (distanceMeters > 100) {
+    await cleanupRejectedUpload();
     res.status(422).json({ message: `Photo location is ${Math.round(distanceMeters)}m from the listing pin. Capture within 100m.` });
     return;
   }

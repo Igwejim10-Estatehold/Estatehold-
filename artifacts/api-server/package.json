@@ -12,6 +12,7 @@
     "test:payout-security": "node --experimental-strip-types --test ./tests/payout-security.test.mjs",
     "test:executive-access": "node --experimental-strip-types --test ./tests/executive-access.test.mjs",
     "test:property-photo-exif": "node --experimental-strip-types --test ./tests/property-photo-exif.test.mjs",
+    "test:property-photo-cleanup": "node --experimental-strip-types --test ./tests/property-photo-cleanup.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
