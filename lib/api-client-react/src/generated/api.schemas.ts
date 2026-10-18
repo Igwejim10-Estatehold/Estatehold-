@@ -422,6 +422,20 @@ export interface SetExecutiveRoleResult {
   role: SetExecutiveRoleResultRole;
 }
 
+export type RevokeExecutiveRoleResultEffectiveRole = typeof RevokeExecutiveRoleResultEffectiveRole[keyof typeof RevokeExecutiveRoleResultEffectiveRole];
+
+
+export const RevokeExecutiveRoleResultEffectiveRole = {
+  client: 'client',
+  owner: 'owner',
+} as const;
+
+export interface RevokeExecutiveRoleResult {
+  profileId: string;
+  executiveAccess: false;
+  effectiveRole: RevokeExecutiveRoleResultEffectiveRole;
+}
+
 export type ProfileRole = typeof ProfileRole[keyof typeof ProfileRole];
 
 

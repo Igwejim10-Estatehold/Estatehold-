@@ -73,6 +73,7 @@ import type {
   PropertyPhotoInput,
   PublicConfig,
   ReviewLandlordKycInput,
+  RevokeExecutiveRoleResult,
   SetExecutiveRoleInput,
   SetExecutiveRoleResult,
   SpecialRequest,
@@ -3226,6 +3227,94 @@ export const useAssignExecutiveRole = <TError = ErrorType<Error>,
         TContext
       > => {
       return useMutation(getAssignExecutiveRoleMutationOptions(options));
+    }
+
+export const getRevokeExecutiveRoleUrl = () => {
+
+
+
+
+  return `/api/admin/set-role`
+}
+
+/**
+ * @summary Revoke executive access from a profile
+ */
+export const revokeExecutiveRole = async (setExecutiveRoleInput: SetExecutiveRoleInput, options?: Parameters<typeof customFetch>[1]): Promise<RevokeExecutiveRoleResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<RevokeExecutiveRoleResult>(getRevokeExecutiveRoleUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(setExecutiveRoleInput)
+  }
+);}
+
+
+
+
+
+export const getRevokeExecutiveRoleMutationKey = () => ['revokeExecutiveRole'] as const;
+
+export const getRevokeExecutiveRoleMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeExecutiveRole>>, TError,RevokeExecutiveRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeExecutiveRole>>, TError,RevokeExecutiveRoleMutationVariables, TContext> => {
+
+const mutationKey = getRevokeExecutiveRoleMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeExecutiveRole>>, RevokeExecutiveRoleMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  revokeExecutiveRole(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeExecutiveRoleMutationResult = NonNullable<Awaited<ReturnType<typeof revokeExecutiveRole>>>
+    export type RevokeExecutiveRoleMutationBody = BodyType<SetExecutiveRoleInput>
+    export type RevokeExecutiveRoleMutationError = ErrorType<Error>
+    export type RevokeExecutiveRoleMutationVariables = {data: BodyType<SetExecutiveRoleInput>}
+
+    /**
+ * @summary Revoke executive access from a profile
+ */
+export const useRevokeExecutiveRole = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeExecutiveRole>>, TError,RevokeExecutiveRoleMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeExecutiveRole>>,
+        TError,
+        RevokeExecutiveRoleMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRevokeExecutiveRoleMutationOptions(options));
     }
 
 export const getGetAdminDashboardUrl = () => {

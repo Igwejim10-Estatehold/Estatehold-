@@ -1091,6 +1091,25 @@ export const AssignExecutiveRoleResponse = zod.object({
 
 
 /**
+ * @summary Revoke executive access from a profile
+ */
+export const revokeExecutiveRoleBodyEmailMax = 254;
+
+
+
+export const RevokeExecutiveRoleBody = zod.object({
+  "email": zod.string().email().max(revokeExecutiveRoleBodyEmailMax),
+  "role": zod.enum(['executive'])
+})
+
+export const RevokeExecutiveRoleResponse = zod.object({
+  "profileId": zod.string(),
+  "executiveAccess": zod.literal(false),
+  "effectiveRole": zod.enum(['client', 'owner'])
+})
+
+
+/**
  * @summary Admin operational overview
  */
 export const GetAdminDashboardResponse = zod.object({

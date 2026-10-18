@@ -106,6 +106,8 @@ export * from './publicConfig';
 export * from './publicConfigPaymentMode';
 export * from './reviewLandlordKycInput';
 export * from './reviewLandlordKycInputDecision';
+export * from './revokeExecutiveRoleResult';
+export * from './revokeExecutiveRoleResultEffectiveRole';
 export * from './setExecutiveRoleInput';
 export * from './setExecutiveRoleInputRole';
 export * from './setExecutiveRoleResult';

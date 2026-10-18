@@ -796,6 +796,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+    delete:
+      operationId: revokeExecutiveRole
+      tags: [admin]
+      summary: Revoke executive access from a profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetExecutiveRoleInput"
+      responses:
+        "200":
+          description: Executive access revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevokeExecutiveRoleResult"
+        "403":
+          description: Only the account owner may revoke executive access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The profile does not currently have executive access
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   /admin/dashboard:
     get:
       operationId: getAdminDashboard
@@ -1295,6 +1326,13 @@ components:
       properties:
         profileId: { type: string }
         role: { type: string, enum: [executive] }
+    RevokeExecutiveRoleResult:
+      type: object
+      required: [profileId, executiveAccess, effectiveRole]
+      properties:
+        profileId: { type: string }
+        executiveAccess: { type: boolean, enum: [false] }
+        effectiveRole: { type: string, enum: [client, owner] }
     Profile:
       type: object
       required: [id, role, fullName, email]

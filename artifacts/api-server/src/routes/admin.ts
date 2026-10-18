@@ -22,12 +22,54 @@ import {
   UpdateComplaintStatusParams,
   AssignExecutiveRoleBody,
   AssignExecutiveRoleResponse,
+  RevokeExecutiveRoleBody,
+  RevokeExecutiveRoleResponse,
 } from "@workspace/api-zod";
 import { requireAuth, requireRoles, requireUser } from "../lib/auth";
 import { type DbRow } from "../lib/estatehold";
 import { supabaseRest, supabaseRpc } from "../lib/supabase";
 
 const router: IRouter = Router();
+
+async function findProfileByEmail(emailInput: string, res: import("express").Response) {
+  const email = emailInput.trim().toLowerCase();
+  const query = new URLSearchParams({
+    select: "id,email,role",
+    email: `ilike.${email}`,
+    limit: "2",
+  });
+  const matches = await supabaseRest<DbRow[]>(`profiles?${query.toString()}`);
+  if (matches.length !== 1) {
+    res.status(matches.length ? 409 : 404).json({
+      message: matches.length
+        ? "More than one profile matches that email; no role was changed."
+        : "No Estatehold profile was found for that email.",
+    });
+    return null;
+  }
+
+  const profileId = String(matches[0]["id"] ?? "");
+  if (!profileId) {
+    res.status(409).json({ message: "The matching profile is missing an account ID; no role was changed." });
+    return null;
+  }
+  return { profileId, role: String(matches[0]["role"] ?? "client") };
+}
+
+async function changeExecutiveAccess(
+  actorProfileId: string,
+  targetProfileId: string,
+  grant: boolean,
+  requestIp: string | undefined,
+) {
+  const rows = await supabaseRpc<DbRow[]>("change_executive_access", {
+    p_actor_profile_id: actorProfileId,
+    p_target_profile_id: targetProfileId,
+    p_grant_access: grant,
+    p_request_ip: requestIp ?? null,
+  });
+  return rows[0];
+}
 
 function toFiniteNumber(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
@@ -60,84 +102,77 @@ router.post("/admin/set-role", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  const email = body.data.email.trim().toLowerCase();
-  const query = new URLSearchParams({
-    select: "id,email,role",
-    email: `ilike.${email}`,
-    limit: "2",
-  });
-  const matches = await supabaseRest<DbRow[]>(`profiles?${query.toString()}`);
-  if (matches.length !== 1) {
-    res.status(matches.length ? 409 : 404).json({
-      message: matches.length
-        ? "More than one profile matches that email; no role was changed."
-        : "No Estatehold profile was found for that email.",
-    });
-    return;
-  }
-
-  const target = matches[0];
-  const previousRole = String(target["role"] ?? "client");
-  if (previousRole === "admin") {
+  const target = await findProfileByEmail(body.data.email, res);
+  if (!target) return;
+  if (target.role === "admin") {
     res.status(409).json({ message: "Administrator roles cannot be changed through executive assignment." });
     return;
   }
 
-  const profileId = String(target["id"] ?? "");
-  if (!profileId) {
-    res.status(409).json({ message: "The matching profile is missing an account ID; no role was changed." });
+  const actor = req.authUser;
+  if (!actor) {
+    res.status(401).json({ message: "Sign in to continue." });
     return;
   }
-
-  // Owner already has access to both operations and executive dashboards.
-  // A request assigning executive to that same profile is an idempotent grant:
-  // preserve the single-valued owner role instead of accidentally downgrading it.
-  if (previousRole === "owner") {
-    const ownerId = req.authUser?.id;
-    if (!ownerId) {
-      res.status(401).json({ message: "Sign in to continue." });
-      return;
-    }
-    await supabaseRest<DbRow[]>(
-      "profile_roles?on_conflict=profile_id,role",
-      {
-        method: "POST",
-        body: { profile_id: profileId, role: "executive", assigned_by: ownerId },
-        prefer: "resolution=merge-duplicates,return=representation",
-      },
-    );
-    req.log.info(
-      { ownerId: req.authUser?.id, targetProfileId: profileId, previousRole, assignedRole: "executive", requestIp: req.ip },
-      "Executive role assigned to owner account without changing owner role",
-    );
-    res.json(AssignExecutiveRoleResponse.parse({ profileId, role: "executive" }));
+  const result = await changeExecutiveAccess(actor.id, target.profileId, true, req.ip);
+  if (!result) {
+    res.status(409).json({ message: "The account role was not changed. Refresh and try again." });
     return;
   }
-
-  const updated = await supabaseRest<DbRow[]>(
-    `profiles?id=eq.${encodeURIComponent(profileId)}&select=id,role`,
+  req.log.info(
     {
-      method: "PATCH",
-      body: { role: "executive" },
-      prefer: "return=representation",
+      ownerId: actor.id,
+      targetProfileId: target.profileId,
+      previousRole: result["previous_role"],
+      assignedRole: result["new_role"],
+      requestIp: req.ip,
     },
+    "Executive access assigned by owner",
   );
-  if (updated.length !== 1) {
+  res.json(AssignExecutiveRoleResponse.parse({ profileId: target.profileId, role: "executive" }));
+});
+
+router.delete("/admin/set-role", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["owner"]))) return;
+  const body = RevokeExecutiveRoleBody.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ message: "Enter a valid account email and choose executive access to revoke." });
+    return;
+  }
+
+  const target = await findProfileByEmail(body.data.email, res);
+  if (!target) return;
+  if (target.role !== "executive" && target.role !== "owner") {
+    res.status(409).json({ message: "This account does not currently have executive access." });
+    return;
+  }
+
+  const actor = req.authUser;
+  if (!actor) {
+    res.status(401).json({ message: "Sign in to continue." });
+    return;
+  }
+  const result = await changeExecutiveAccess(actor.id, target.profileId, false, req.ip);
+  if (!result || result["changed"] !== true) {
     res.status(409).json({ message: "The account role was not changed. Refresh and try again." });
     return;
   }
 
   req.log.info(
     {
-      ownerId: req.authUser?.id,
-      targetProfileId: profileId,
-      previousRole,
-      assignedRole: "executive",
+      ownerId: actor.id,
+      targetProfileId: target.profileId,
+      previousRole: result["previous_role"],
+      newRole: result["new_role"],
       requestIp: req.ip,
     },
-    "Executive access assigned by owner",
+    "Executive access revoked by owner",
   );
-  res.json(AssignExecutiveRoleResponse.parse({ profileId, role: "executive" }));
+  res.json(RevokeExecutiveRoleResponse.parse({
+    profileId: target.profileId,
+    executiveAccess: false,
+    effectiveRole: result["new_role"],
+  }));
 });
 
 async function countRows(path: string): Promise<number> {
