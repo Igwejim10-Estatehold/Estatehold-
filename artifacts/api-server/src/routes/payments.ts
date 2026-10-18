@@ -86,6 +86,11 @@ async function startRentPayout(
 ): Promise<void> {
   const destination = await loadVerifiedPayoutDestination(landlordId, true);
   if (!destination) return;
+  const claimed = await supabaseRest<DbRow[]>(
+    `rental_payouts?id=eq.${encodeURIComponent(payoutId)}&status=eq.awaiting_destination&select=id`,
+    { method: "PATCH", body: { status: "initiating", updated_at: new Date().toISOString() }, prefer: "return=representation" },
+  );
+  if (!claimed.length) return;
   const setPayout = async (body: Record<string, unknown>) => {
     await supabaseRest(`rental_payouts?id=eq.${encodeURIComponent(payoutId)}`, {
       method: "PATCH",
@@ -93,7 +98,6 @@ async function startRentPayout(
       prefer: "return=minimal",
     });
   };
-  await setPayout({ status: "initiating" });
   try {
     const recipientResponse = await fetch("https://api.paystack.co/transferrecipient", {
       method: "POST",
@@ -150,6 +154,40 @@ async function startRentPayout(
     });
   }
 }
+
+router.post("/admin/compliance/payouts/:payoutId/process", requireAuth, async (req, res): Promise<void> => {
+  if (!(await requireRoles(req, res, ["admin"]))) return;
+  const actor = await requireUser(req, res);
+  if (!actor) return;
+  const payoutId = String(req.params["payoutId"] ?? "");
+  if (!UUID_PATTERN.test(payoutId)) { res.status(400).json({ message: "Invalid payout record." }); return; }
+  const secret = process.env["PAYSTACK_SECRET_KEY"]?.trim() ?? "";
+  const publicKey = process.env["PAYSTACK_PUBLIC_KEY"]?.trim() ?? "";
+  if (!secret.startsWith("sk_live_") || !publicKey.startsWith("pk_live_")) {
+    res.status(503).json({ message: "Payout processing is available only with the verified live Paystack configuration." }); return;
+  }
+  const candidates = await supabaseRest<DbRow[]>(`rental_payouts?id=eq.${encodeURIComponent(payoutId)}&status=eq.awaiting_destination&select=id,transaction_id,landlord_id,amount_naira,transfer_reference&limit=1`);
+  const payout = candidates[0];
+  if (!payout) { res.status(409).json({ message: "This payout is not eligible. Only unprocessed pending payouts can be started." }); return; }
+  const transactions = await supabaseRest<DbRow[]>(`transactions?id=eq.${encodeURIComponent(String(payout["transaction_id"]))}&select=id,status,payment_mode,installment_count,properties(intent)&limit=1`);
+  const transaction = transactions[0];
+  const property = transaction?.["properties"] as DbRow | null;
+  if (!transaction || !["paid", "completed"].includes(String(transaction["status"])) ||
+      transaction["payment_mode"] !== "full" || Number(transaction["installment_count"]) !== 1 ||
+      property?.["intent"] !== "rent") {
+    res.status(409).json({ message: "Only a verified full-rent payment can be processed." }); return;
+  }
+  await startRentPayout(
+    payoutId,
+    String(payout["landlord_id"]),
+    Number(payout["amount_naira"]),
+    String(payout["transfer_reference"]),
+    secret,
+  );
+  const updated = await supabaseRest<DbRow[]>(`rental_payouts?id=eq.${encodeURIComponent(payoutId)}&select=status&limit=1`);
+  await supabaseRest("admin_audit_logs", { method: "POST", body: { actor_id: actor.id, action: "rental_payout_process_requested", entity_type: "rental_payout", entity_id: payoutId, reason: `status:${String(updated[0]?.["status"] ?? "unknown")}` }, prefer: "return=minimal" });
+  res.json({ payoutId, status: String(updated[0]?.["status"] ?? "unknown") });
+});
 
 function providerState(status: unknown): "pending" | "success" | "failed" | "reversed" {
   switch (String(status ?? "").toLowerCase()) {

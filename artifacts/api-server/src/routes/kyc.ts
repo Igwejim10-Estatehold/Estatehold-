@@ -123,7 +123,7 @@ router.get("/admin/compliance/properties", requireAuth, async (req, res): Promis
 });
 router.get("/executive/compliance/properties", requireAuth, async (req, res): Promise<void> => {
   if (!(await requireRoles(req, res, ["executive"]))) return;
-  const rows = await supabaseRest<DbRow[]>("properties?select=id,title,owner_id,state,lga,town,image_url,landlord_kyc_verified,admin_approved,executive_approved,approval_status,property_documents_urls,property_video_url&admin_approved=eq.true&executive_approved=eq.false&order=created_at.asc&limit=250");
+  const rows = await supabaseRest<DbRow[]>("properties?select=id,title,owner_id,state,lga,town,image_url,landlord_kyc_verified,admin_approved,executive_approved,approval_status,property_documents_urls,property_video_url&approval_status=in.(admin_approved,rejected)&order=created_at.asc&limit=250");
   res.json({ items: rows });
 });
 router.get("/admin/compliance/payouts", requireAuth, async (req, res): Promise<void> => {
@@ -195,10 +195,20 @@ router.post("/executive/properties/:propertyId/approve", requireAuth, async (req
   if (!(await requireRoles(req, res, ["executive"]))) return;
   const actor = await requireUser(req, res); if (!actor) return;
   const propertyId = String(req.params["propertyId"] ?? "");
-  const approve = (req.body as Record<string, unknown>)?.approve === true;
-  const rows = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(propertyId)}&admin_approved=eq.true&executive_approved=eq.false&select=id`, { method: "PATCH", body: { executive_approved: approve, approval_status: approve ? "approved" : "rejected", is_active: approve, listing_moderation_status: approve ? "approved" : "rejected", updated_at: new Date().toISOString() }, prefer: "return=representation" });
-  if (!rows.length) { res.status(404).json({ message: "An admin-approved property awaiting executive review was not found." }); return; }
-  await supabaseRest("admin_audit_logs", { method: "POST", body: { actor_id: actor.id, action: approve ? "property_executive_approved" : "property_executive_rejected", entity_type: "property", entity_id: propertyId }, prefer: "return=minimal" });
+  const body = req.body as Record<string, unknown>;
+  const approve = body["approve"] === true;
+  const override = body["override"] === true;
+  const reason = text(body["reason"]).slice(0, 500);
+  if (!/^[0-9a-f-]{36}$/i.test(propertyId) || ((override || !approve) && !reason)) { res.status(400).json({ message: "A reason is required for an override or rejection." }); return; }
+  if (approve) {
+    const candidate = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(propertyId)}&select=id,landlord_kyc_verified,rental_status&limit=1`);
+    if (!candidate[0] || candidate[0]["landlord_kyc_verified"] !== true) { res.status(409).json({ message: "Property cannot go public before landlord KYC is verified." }); return; }
+    if (candidate[0]["rental_status"] === "rented") { res.status(409).json({ message: "Rented properties cannot be republished as available." }); return; }
+  }
+  const filter = override ? `id=eq.${encodeURIComponent(propertyId)}` : `id=eq.${encodeURIComponent(propertyId)}&admin_approved=eq.true&executive_approved=eq.false`;
+  const rows = await supabaseRest<DbRow[]>(`properties?${filter}&select=id`, { method: "PATCH", body: { admin_approved: override ? approve : true, executive_approved: approve, approval_status: approve ? "approved" : "rejected", is_active: approve, listing_moderation_status: approve ? "approved" : "rejected", updated_at: new Date().toISOString() }, prefer: "return=representation" });
+  if (!rows.length) { res.status(404).json({ message: "The property was not found or is no longer eligible for this executive decision." }); return; }
+  await supabaseRest("admin_audit_logs", { method: "POST", body: { actor_id: actor.id, action: override ? `property_executive_override_${approve ? "approved" : "rejected"}` : `property_executive_${approve ? "approved" : "rejected"}`, entity_type: "property", entity_id: propertyId, reason: reason || null }, prefer: "return=minimal" });
   res.json({ approved: approve });
 });
 router.post("/admin/compliance/:kind/:id/review", requireAuth, async (req, res): Promise<void> => {
@@ -219,6 +229,10 @@ router.post("/admin/compliance/:kind/:id/review", requireAuth, async (req, res):
     table = "tenant_applications"; filter = `id=eq.${encodeURIComponent(id)}&status=eq.pending`;
     body = { status: decision, rejection_reason: decision === "rejected" ? reason : null, reviewed_by: actor.id, reviewed_at: reviewedAt, updated_at: reviewedAt };
   } else {
+    if (decision === "approved") {
+      const candidates = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(id)}&approval_status=eq.pending&select=id,landlord_kyc_verified&limit=1`);
+      if (!candidates[0] || candidates[0]["landlord_kyc_verified"] !== true) { res.status(409).json({ message: "Property cannot be approved before landlord KYC is verified." }); return; }
+    }
     table = "properties"; filter = `id=eq.${encodeURIComponent(id)}&approval_status=eq.pending`;
     body = { admin_approved: decision === "approved", approval_status: decision === "approved" ? "admin_approved" : "rejected", updated_at: reviewedAt };
   }

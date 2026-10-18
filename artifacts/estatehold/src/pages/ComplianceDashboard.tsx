@@ -96,13 +96,27 @@ export default function ComplianceDashboard({ token, executive = false, supabase
     } catch (reason) { setError(reason instanceof Error ? reason.message : "User role could not be changed."); }
     finally { setBusy(""); }
   }
-  async function finalApprove(row: Row) {
+  async function processPayout(row: Row) {
+    const id = String(row.id ?? "");
+    if (!id || row.status !== "awaiting_destination") return;
+    const key = `payout:${id}`; setBusy(key); setError(""); setSuccess("");
+    try {
+      const result = await request(`/api/admin/compliance/payouts/${encodeURIComponent(id)}/process`, { method: "POST" });
+      setSuccess(`Payout processing started. Current status: ${String(result.status ?? "initiating")}.`);
+      setRefresh(value => value + 1);
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Payout could not be started."); }
+    finally { setBusy(""); }
+  }
+  async function finalDecision(row: Row, approve: boolean, override = false) {
     const id = String(row.id ?? "");
     if (!id) return;
+    const reason = (!approve || override) ? window.prompt(override ? "Reason for overriding the admin decision" : "Reason for rejecting this property")?.trim() : "";
+    if ((!approve || override) && !reason) return;
     const key = `property:${id}`; setBusy(key); setError(""); setSuccess("");
     try {
-      await request(`/api/executive/properties/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approve: true }) });
-      setSuccess("Property has final executive approval."); setRefresh(value => value + 1);
+      await request(`/api/executive/properties/${encodeURIComponent(id)}/approve`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ approve, override, reason }) });
+      setSuccess(override ? `Executive override ${approve ? "approved" : "rejected"} the property.` : `Executive ${approve ? "approved" : "rejected"} the property.`);
+      setRefresh(value => value + 1);
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Final approval could not be saved."); }
     finally { setBusy(""); }
   }
@@ -199,7 +213,9 @@ export default function ComplianceDashboard({ token, executive = false, supabase
             <button data-testid={`button-reject-${rowId}`} disabled={!!busy} onClick={() => setRejectTarget({ kind, row })} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#e7d0ca] px-4 text-sm font-bold text-[#914c40] hover:bg-[#fff6f3] disabled:opacity-55"><X size={15}/>Reject</button>
           </div>}
           {tab === "Users" && executive && <div className="mt-4 border-t border-[#edf0e9] pt-4"><button data-testid={`button-role-${rowId}`} disabled={!!busy} onClick={() => void changeRole(row)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#dce4da] px-4 text-sm font-bold text-[#45654d] hover:bg-[#f3f6ef] disabled:opacity-55"><Users size={15}/>{busy === `role:${rowId}` ? "Updating…" : row.role === "admin" ? "Remove admin access" : "Grant admin access"}</button></div>}
-          {tab === "Properties" && executive && row.admin_approved === true && row.executive_approved !== true && <div className="mt-4 border-t border-[#edf0e9] pt-4"><button data-testid={`button-final-approval-${rowId}`} disabled={!!busy} onClick={() => void finalApprove(row)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#285139] px-4 text-sm font-bold text-white hover:bg-[#1e432e] disabled:opacity-55"><BadgeCheck size={15}/>{busy === `property:${rowId}` ? "Saving approval…" : "Final executive approval"}</button></div>}
+          {tab === "Payouts" && row.status === "awaiting_destination" && <div className="mt-4 border-t border-[#edf0e9] pt-4"><button data-testid={`button-process-payout-${rowId}`} disabled={!!busy} onClick={() => void processPayout(row)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#285139] px-4 text-sm font-bold text-white hover:bg-[#1e432e] disabled:opacity-55"><Banknote size={15}/>{busy === `payout:${rowId}` ? "Starting payout…" : "Process eligible payout"}</button><p className="mt-2 text-xs text-[#78857b]">Only live-verified rent payments with an approved landlord bank account can be processed.</p></div>}
+          {tab === "Properties" && executive && row.admin_approved === true && row.executive_approved !== true && <div className="mt-4 flex flex-wrap gap-2 border-t border-[#edf0e9] pt-4"><button data-testid={`button-final-approval-${rowId}`} disabled={!!busy} onClick={() => void finalDecision(row, true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#285139] px-4 text-sm font-bold text-white hover:bg-[#1e432e] disabled:opacity-55"><BadgeCheck size={15}/>{busy === `property:${rowId}` ? "Saving…" : "Final approve"}</button><button data-testid={`button-final-reject-${rowId}`} disabled={!!busy} onClick={() => void finalDecision(row, false)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#e7d0ca] px-4 text-sm font-bold text-[#914c40] disabled:opacity-55"><X size={15}/>Reject</button></div>}
+          {tab === "Properties" && executive && row.approval_status === "rejected" && <div className="mt-4 flex flex-wrap gap-2 border-t border-[#edf0e9] pt-4"><button data-testid={`button-override-approve-${rowId}`} disabled={!!busy} onClick={() => void finalDecision(row, true, true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#285139] px-4 text-sm font-bold text-white disabled:opacity-55"><BadgeCheck size={15}/>{busy === `property:${rowId}` ? "Saving…" : "Override approve"}</button><button data-testid={`button-override-reject-${rowId}`} disabled={!!busy} onClick={() => void finalDecision(row, false, true)} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-[#e7d0ca] px-4 text-sm font-bold text-[#914c40] disabled:opacity-55"><X size={15}/>Override reject</button></div>}
           {rejectTarget?.row === row && <form onSubmit={event => { event.preventDefault(); const reason = String(new FormData(event.currentTarget).get("reason") || "").trim(); if (reason) void review(rejectTarget.kind, rejectTarget.row, "rejected", reason); }} className="mt-4 rounded-xl border border-[#ead0c8] bg-[#fff8f5] p-4">
             <label className="block text-sm font-bold text-[#773f36]" htmlFor={`reject-reason-${rowId}`}>Reason for rejection<span className="ml-1 text-[#a14b3f]">*</span><textarea id={`reject-reason-${rowId}`} name="reason" required maxLength={500} rows={3} className="mt-2 w-full rounded-lg border border-[#e2c6be] bg-white p-3 text-sm font-normal text-[#34483b] outline-none focus:ring-2 focus:ring-[#a45445]/20" placeholder="Explain what needs attention"/></label>
             <div className="mt-3 flex gap-2"><button disabled={!!busy} className="min-h-10 rounded-lg bg-[#914c40] px-4 text-sm font-bold text-white disabled:opacity-50">Confirm rejection</button><button type="button" onClick={() => setRejectTarget(null)} className="min-h-10 rounded-lg border border-[#dfc7c0] px-4 text-sm font-bold text-[#704940]">Cancel</button></div>
