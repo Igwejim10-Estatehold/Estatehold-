@@ -149,6 +149,16 @@ router.post(
     if (!user) return;
     const input = parsed.data;
     const ownerProfile = await loadProfile(user.id);
+    if (ownerProfile?.["role"] === "landlord") {
+      const [payoutKyc, indemnity] = await Promise.all([
+        supabaseRest<DbRow[]>(`payout_destinations?user_id=eq.${encodeURIComponent(user.id)}&is_verified=eq.true&select=user_id&limit=1`),
+        supabaseRest<DbRow[]>(`landlord_kyc?user_id=eq.${encodeURIComponent(user.id)}&indemnity_signed=eq.true&select=user_id&limit=1`),
+      ]);
+      if (!payoutKyc.length || !indemnity.length) {
+        res.status(403).json({ message: "Complete and receive approval for landlord KYC and sign the landlord indemnity before listing." });
+        return;
+      }
+    }
     if (
       ownerProfile?.["role"] === "agent" &&
       ownerProfile["verification_status"] !== "verified"
@@ -202,7 +212,11 @@ router.post(
       is_managed: false,
       is_exclusive: true,
       is_locked: false,
-      is_active: true,
+      is_active: false,
+      landlord_kyc_verified: ownerProfile?.["role"] === "landlord",
+      admin_approved: false,
+      executive_approved: false,
+      approval_status: "pending",
       listing_moderation_status: "pending",
       premises_rules_url: input.premisesRulesUrl?.trim() || null,
       hotel_cac_number: isAccommodation ? input.hotelCacNumber?.trim() : null,

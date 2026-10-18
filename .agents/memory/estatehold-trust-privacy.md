@@ -11,8 +11,8 @@ Guest-facing consent text: “Guest privacy respected. No monitoring inside room
 
 **How to apply:** Keep check-in opt-in, never imply room surveillance, and disclose any common-area CCTV in hotel and short-let flows.
 
-The user has not selected a NIN/BVN verification provider and has no confirmed corporate office addresses, phone numbers, or support hours to publish.
+NIN capture is required for the KYC flows and must remain encrypted at rest. A captured NIN is not verified unless a real verification process confirms it; no NIN/BVN verification provider has been selected. Corporate office addresses, phone numbers, and support hours are not confirmed.
 
-**Why:** The user confirmed these details are currently unavailable.
+**Why:** The user explicitly requested full KYC capture but did not select a NIN/BVN verification provider or provide confirmed office records.
 
-**How to apply:** Do not collect NIN/BVN or invent office listings until the user supplies a verification provider and confirmed office records.
+**How to apply:** Keep NIN encrypted, show it as unverified until confirmation exists, and do not invent office listings.

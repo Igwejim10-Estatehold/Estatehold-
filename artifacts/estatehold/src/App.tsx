@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider, useQueryClient, type UseQueryResult }
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Link, Route, Switch, useLocation, useRoute, Router as WouterRouter } from 'wouter';
+import { Link, Redirect, Route, Switch, useLocation, useRoute, Router as WouterRouter } from 'wouter';
 import { setAuthTokenGetter } from '@workspace/api-client-react';
 import {
   getGetAdminDashboardQueryKey, getGetDashboardQueryKey, getGetProfileQueryKey, getGetPublicConfigQueryKey,
@@ -29,6 +29,8 @@ import {
 } from 'lucide-react';
 import NotFound from '@/pages/not-found';
 import LandlordKycPage from '@/pages/LandlordKycPage';
+import KycOnboardingPage from '@/pages/KycOnboardingPage';
+import ComplianceDashboard from '@/pages/ComplianceDashboard';
 import EstateholdMap from '@/components/EstateholdMap';
 import PropertyLocationPicker from '@/components/PropertyLocationPicker';
 import PropertyPhotoCapture, { distanceMeters, type LivePropertyProof } from '@/components/PropertyPhotoCapture';
@@ -813,17 +815,23 @@ function AppContent() {
         return <AgreementPage properties={propertiesQuery.data?.items || dashboard.data?.items || []} mutation={createAgreement} result={createdAgreement} onResult={setCreatedAgreement}/>;
       case '/landlord-kyc':
         return <LandlordKycPage authSession={authSession} profile={profile.data} config={config.data}/>;
+      case '/landlord-onboarding':
+        return <KycOnboardingPage kind="landlord" accessToken={authSession?.access_token} userId={authSession?.user?.id} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
+      case '/tenant-application':
+        return <KycOnboardingPage kind="tenant" accessToken={authSession?.access_token} userId={authSession?.user?.id} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
+      case '/unauthorized':
+        return <div className="mx-auto max-w-xl space-y-4 py-12"><PageIntro eyebrow="Restricted area" title="You don’t have access" text="Sign in with an authorized Estatehold admin or executive account, or return to the marketplace."/><div className="flex gap-3"><Link href="/sign-in" className="rounded-xl bg-[#173b24] px-4 py-3 text-sm font-bold text-white">Sign in</Link><Link href="/" className="rounded-xl border px-4 py-3 text-sm font-bold">Marketplace</Link></div></div>;
       case '/executive':
-        if (!authSession && !mockOwnerPreview) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Sign-in required" text="Sign in with an Estatehold owner or executive account to continue."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link>{mockOwnerPreviewButton}</div>;
+        if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
         if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
-        if (!mockOwnerPreview && !['owner', 'executive'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Executive office" title="Executive access required" text="This dashboard is restricted to Estatehold owners and executives."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link>{mockOwnerPreviewButton}</div>;
-        return <>{mockOwnerPreviewBanner}<ExecutiveDashboard/></>;
+        if (!mockOwnerPreview && String(profile.data?.role) !== 'executive') return <Redirect to="/unauthorized"/>;
+        return mockOwnerPreview ? <>{mockOwnerPreviewBanner}<ExecutiveDashboard/></> : <ComplianceDashboard token={authSession?.access_token} executive supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
       case '/admin':
-        if (!authSession && !mockOwnerPreview) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin sign-in required" text="Use your Estatehold administrator account to open review tools."/><Link href="/sign-in" className="font-bold text-[#18783a] underline">Sign in</Link>{mockOwnerPreviewButton}</div>;
+        if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
         if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
-        if (!mockOwnerPreview && !['admin', 'owner'].includes(String(profile.data?.role))) return <div className="space-y-4"><PageIntro eyebrow="Operations" title="Admin access required" text="This review desk is restricted to approved administrators and the account owner."/><Link href="/" className="font-bold text-[#18783a] underline">Return to marketplace</Link>{mockOwnerPreviewButton}</div>;
+        if (!mockOwnerPreview && !['admin', 'executive'].includes(String(profile.data?.role))) return <Redirect to="/unauthorized"/>;
         if (ADMIN_MOCK_MODE) return <>{mockOwnerPreviewBanner}<AdminMockDashboard/></>;
-        return <div className="space-y-6"><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
+        return <div className="space-y-6"><ComplianceDashboard token={authSession?.access_token} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
            <div className="rounded-3xl border border-[#e4eae3] bg-white p-4">
               <div className="flex gap-2 overflow-x-auto">{['Pending Agents','Landlord KYC','All Agents','Properties','Users','Payments','Agent payouts','Construction requests'].map(tab=><button key={tab} onClick={()=>{setAdminWorkspaceTab(tab);if(tab==='Pending Agents')document.getElementById('pending-agents-queue')?.scrollIntoView({behavior:'smooth'});}} className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold ${adminWorkspaceTab===tab?'bg-[#0B0F0E] text-white':'bg-[#f3f6f1] text-[#516256]'}`}>{tab}</button>)}</div>
@@ -1090,7 +1098,7 @@ function Router() {
     <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/construction"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id/edit"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/payment-status"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
-    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
+    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/landlord-onboarding"><AppContent/></Route><Route path="/tenant-application"><AppContent/></Route><Route path="/unauthorized"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }
 function App() {

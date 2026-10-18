@@ -66,7 +66,8 @@ export async function requireRoles(
   const user = await requireUser(req, res);
   if (!user) return false;
   const role = await getUserRole(user.id);
-  if (!roles.includes(role)) {
+  const executiveHasAdminAccess = role === "executive" && roles.includes("admin");
+  if (!roles.includes(role) && !executiveHasAdminAccess) {
     res.status(403).json({ message: "Your account does not have access to this action." });
     return false;
   }

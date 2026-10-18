@@ -331,7 +331,10 @@ router.put("/account/profile", requireAuth, async (req, res): Promise<void> => {
   if (!user) return;
   const input = parsed.data;
   const current = await loadProfile(user.id);
-  const existingRole = current?.["role"] === "admin" ? "admin" : input.role;
+  const currentRole = String(current?.["role"] ?? "");
+  const existingRole = ["admin", "executive", "owner"].includes(currentRole)
+    ? currentRole
+    : input.role;
 
   if (input.role === "attorney" && !input.nbaSealNumber?.trim()) {
     res.status(422).json({ message: "Enter your NBA seal number to request attorney verification." });

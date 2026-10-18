@@ -11,15 +11,16 @@ export type VerifiedPayoutDestination = {
 
 export async function loadVerifiedPayoutDestination(
   userId: string,
+  requireKycApproval = false,
 ): Promise<VerifiedPayoutDestination | null> {
   const query = new URLSearchParams({
-    select: "encrypted_payload,iv,auth_tag,encryption_version,verified_at",
+    select: "encrypted_payload,iv,auth_tag,encryption_version,verified_at,is_verified",
     user_id: `eq.${userId}`,
     limit: "1",
   });
   const rows = await supabaseRest<DbRow[]>(`payout_destinations?${query}`);
   const row = rows[0];
-  if (!row || !row["verified_at"]) return null;
+  if (!row || !row["verified_at"] || (requireKycApproval && row["is_verified"] !== true)) return null;
   const encryptionVersion = Number(row["encryption_version"]);
 
   let details: Record<string, unknown>;

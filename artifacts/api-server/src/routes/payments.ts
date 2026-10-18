@@ -84,7 +84,7 @@ async function startRentPayout(
   reference: string,
   secretKey: string,
 ): Promise<void> {
-  const destination = await loadVerifiedPayoutDestination(landlordId);
+  const destination = await loadVerifiedPayoutDestination(landlordId, true);
   if (!destination) return;
   const setPayout = async (body: Record<string, unknown>) => {
     await supabaseRest(`rental_payouts?id=eq.${encodeURIComponent(payoutId)}`, {
@@ -563,7 +563,7 @@ router.post(
 
     let destination: Awaited<ReturnType<typeof loadVerifiedPayoutDestination>>;
     try {
-      destination = await loadVerifiedPayoutDestination(agentId);
+      destination = await loadVerifiedPayoutDestination(agentId, true);
     } catch (error) {
       req.log.error({ transactionId, error }, "Could not decrypt the verified agent payout destination");
       res.status(503).json({ message: "The verified payout destination could not be loaded." });
@@ -750,6 +750,15 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       res.status(409).json({ message: "You cannot start a transaction for this listing." });
       return;
     }
+    if (listings[0]["intent"] === "rent") {
+      const application = await supabaseRest<DbRow[]>(
+        `tenant_applications?user_id=eq.${encodeURIComponent(user.id)}&status=eq.approved&select=id&limit=1`,
+      );
+      if (!application.length) {
+        res.status(403).json({ message: "Submit and receive approval for your tenant application before paying rent." });
+        return;
+      }
+    }
     const result = await supabaseRpc<DbRow | DbRow[]>("create_estatehold_transaction", {
       p_property_id: parsed.data.propertyId,
       p_buyer_id: user.id,
@@ -823,7 +832,7 @@ router.post("/payments/initialize", requireAuth, async (req, res): Promise<void>
     const ownerId = String(propertyRelation["owner_id"] ?? "");
     let destination: Awaited<ReturnType<typeof loadVerifiedPayoutDestination>>;
     try {
-      destination = await loadVerifiedPayoutDestination(ownerId);
+      destination = await loadVerifiedPayoutDestination(ownerId, true);
     } catch {
       res.status(503).json({ message: "The landlord payout account could not be verified right now." });
       return;
