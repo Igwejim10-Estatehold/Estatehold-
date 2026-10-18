@@ -50,12 +50,21 @@ export async function requireUser(req: Request, res: Response) {
 
 export async function getUserRole(userId: string): Promise<string> {
   const params = new URLSearchParams({
-    select: "role",
+    select: "role,is_executive,is_admin",
     id: `eq.${userId}`,
     limit: "1",
   });
-  const rows = await supabaseRest<Array<{ role: string }>>(`profiles?${params}`);
-  return rows[0]?.role ?? "client";
+  try {
+    const rows = await supabaseRest<Array<{ role?: string; is_executive?: boolean; is_admin?: boolean }>>(`profiles?${params}`);
+    if (rows[0]?.is_executive === true) return "executive";
+    if (rows[0]?.is_admin === true) return "admin";
+    return rows[0]?.role ?? "client";
+  } catch {
+    // Older Supabase schemas may not have the explicit role flags yet.
+    const legacyParams = new URLSearchParams({ select: "role", id: `eq.${userId}`, limit: "1" });
+    const rows = await supabaseRest<Array<{ role?: string }>>(`profiles?${legacyParams}`);
+    return rows[0]?.role ?? "client";
+  }
 }
 
 export async function requireRoles(

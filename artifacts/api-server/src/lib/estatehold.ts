@@ -128,9 +128,15 @@ export async function loadProfile(userId: string): Promise<DbRow | null> {
 }
 
 export function mapProfile(row: DbRow) {
+  const role =
+    row["is_executive"] === true
+      ? "executive"
+      : row["is_admin"] === true
+        ? "admin"
+        : String(row["role"] ?? "client");
   return {
     id: String(row["id"]),
-    role: String(row["role"] ?? "client"),
+    role,
     fullName: String(row["full_name"] ?? ""),
     email: String(row["email"] ?? ""),
     phone: String(row["phone"] ?? ""),
