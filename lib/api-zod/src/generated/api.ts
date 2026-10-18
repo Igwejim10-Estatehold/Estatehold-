@@ -423,6 +423,18 @@ export const UpdatePropertyResponse = zod.object({
 
 
 /**
+ * @summary Check whether the owner can submit verification photo evidence
+ */
+export const GetPropertyPhotoRetryStatusParams = zod.object({
+  "propertyId": zod.coerce.string()
+})
+
+export const GetPropertyPhotoRetryStatusResponse = zod.object({
+  "canRetry": zod.boolean()
+})
+
+
+/**
  * @summary Save a live property verification photo
  */
 export const CreatePropertyPhotoParams = zod.object({

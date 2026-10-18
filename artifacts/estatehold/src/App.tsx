@@ -196,6 +196,89 @@ function AdminPropertyReviewCard({ property, accessToken, onDecision }: {
     </div>
   </article>;
 }
+function OwnerVerificationPhotoRetry({ propertyId, latitude, longitude, accessToken, onSave, onSaved }: {
+  propertyId: string;
+  latitude: number;
+  longitude: number;
+  accessToken: string;
+  onSave: (proof: LivePropertyProof) => Promise<void>;
+  onSaved: () => void;
+}) {
+  const [eligibility, setEligibility] = useState<'checking' | 'available' | 'unavailable' | 'error'>('checking');
+  const [proof, setProof] = useState<LivePropertyProof | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const checkEligibility = async (signal?: AbortSignal) => {
+    setEligibility('checking');
+    setError('');
+    try {
+      const response = await fetch(`/api/properties/${encodeURIComponent(propertyId)}/photos/retry-status`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal,
+      });
+      if (response.status === 403 || response.status === 404) {
+        setEligibility('unavailable');
+        return;
+      }
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || 'Could not check photo retry availability.');
+      setEligibility(payload.canRetry ? 'available' : 'unavailable');
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setError(cause instanceof Error ? cause.message : 'Could not check photo retry availability.');
+      setEligibility('error');
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void checkEligibility(controller.signal);
+    return () => controller.abort();
+  }, [propertyId, accessToken]);
+
+  const submit = async () => {
+    if (!proof || saving) return;
+    const distance = distanceMeters(proof.latitude, proof.longitude, latitude, longitude);
+    if (distance > 100) {
+      setError(`Photo is ${Math.round(distance)}m from this listing. Capture within 100m.`);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setSuccess('');
+    try {
+      await onSave(proof);
+      setProof(null);
+      setEligibility('unavailable');
+      setSuccess('Replacement photo submitted. This listing is back in review.');
+      onSaved();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The verification photo could not be submitted.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (eligibility === 'unavailable' && !success) return null;
+  return <section className="mt-5 rounded-2xl border border-[#e4eae3] bg-[#f7faf6] p-4" data-testid={`section-photo-retry-${propertyId}`}>
+    <h2 className="font-display text-lg font-extrabold">Property verification photo</h2>
+    {eligibility === 'checking' && <p className="mt-2 text-sm text-[#718077]" role="status">Checking whether this listing needs a photo…</p>}
+    {eligibility === 'error' && <div className="mt-3"><Notice tone="red">{error}</Notice><Button onClick={() => void checkEligibility()} variant="outline" testId={`button-check-photo-retry-${propertyId}`}>Check again</Button></div>}
+    {success && <p className="mt-3 rounded-lg bg-green-50 p-3 text-sm font-semibold text-green-900" role="status" data-testid={`status-photo-retry-success-${propertyId}`}>{success}</p>}
+    {eligibility === 'available' && <>
+      <p className="mt-1 text-sm leading-6 text-[#68776d]">Capture a new live photo for this listing. Existing accepted evidence cannot be replaced.</p>
+      <div className="mt-3">
+        <PropertyPhotoCapture listingLatitude={latitude} listingLongitude={longitude} proof={proof} onProofChange={setProof} testIdPrefix={`photo-retry-${propertyId}`}/>
+      </div>
+      {error && <div className="mt-3" role="alert" data-testid={`status-photo-retry-error-${propertyId}`}><Notice tone="red">{error}</Notice></div>}
+      <Button onClick={submit} disabled={!proof || saving} testId={`button-submit-photo-retry-${propertyId}`}>
+        {saving ? <><LoaderCircle className="animate-spin" size={16}/>Submitting photo…</> : 'Submit replacement photo'}
+      </Button>
+    </>}
+  </section>;
+}
 function PropertyCard({ property }: { property: Property }) {
   return <Link href={`/property/${property.id}`} className="group overflow-hidden rounded-2xl border border-[#e4eae3] bg-white transition-transform hover:-translate-y-1 hover:shadow-lg hover:shadow-[#1d3523]/[.06]" data-testid={`card-property-${property.id}`}>
     <div className="relative h-48 overflow-hidden bg-[#e9eee8]">{property.imageUrl ? <img src={property.imageUrl} alt={property.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"/> :
@@ -731,7 +814,22 @@ function AppContent() {
               <div className="mt-6"><Notice>Estatehold checks location pins and makes tenant-protection status visible. Always inspect and confirm terms before making a commitment.</Notice></div>
               {p.premisesRulesUrl && <a href={p.premisesRulesUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-sm font-bold text-[#28763d]"><FileText size={15}/>View premises rules</a>}</div></div>
             <aside className="h-fit rounded-3xl border border-[#e3e9e2] bg-white p-6"><p className="font-display text-3xl font-extrabold">{money(p.priceNaira)}</p><p className="mt-1 text-sm text-[#748077]">{p.priceUnit || (p.intent === 'rent' ? 'per year' : p.intent)}</p>
-               <div className="mt-5 space-y-3">{authSession && <Link href={`/property/${p.id}/edit`} className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Edit listing</Link>}
+                <div className="mt-5 space-y-3">{authSession && <Link href={`/property/${p.id}/edit`} className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Edit listing</Link>}
+                  {authSession && p.latitude !== undefined && p.longitude !== undefined && <OwnerVerificationPhotoRetry
+                    propertyId={p.id}
+                    latitude={p.latitude}
+                    longitude={p.longitude}
+                    accessToken={authSession.access_token}
+                    onSave={proof => savePropertyProof(p.id, proof)}
+                    onSaved={() => {
+                      void Promise.all([
+                        singleProperty.refetch(),
+                        refresh(getListPropertiesQueryKey(propertyFilters)),
+                        refresh(getListPropertiesQueryKey({})),
+                        refresh(getGetDashboardQueryKey()),
+                      ]);
+                    }}
+                  />}
                  {p.intent === 'rent' && <Button onClick={() => beginRentCheckout(p.id)} disabled={config.data?.paymentMode === 'disabled' || createTransaction.isPending || initializePayment.isPending} testId="button-pay-rent">{createTransaction.isPending || initializePayment.isPending ? 'Starting secure checkout…' : authSession ? 'Pay rent securely' : 'Sign in to pay rent'}</Button>}
                  <Link href="/wallet" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Review fees & checkout</Link><Link href="/tenancy-agreement" className="flex min-h-12 items-center justify-center rounded-xl border border-[#dfe7df] px-4 text-sm font-bold">Prepare tenancy draft</Link></div>
                {(createTransaction.isError || initializePayment.isError) && <Notice tone="red">Checkout could not start. Confirm your account is signed in and the landlord has a verified payout account, then retry.</Notice>}

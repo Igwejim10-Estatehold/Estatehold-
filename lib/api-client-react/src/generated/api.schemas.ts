@@ -216,6 +216,10 @@ export interface PropertyPhoto {
   within100m: boolean;
 }
 
+export interface PropertyPhotoRetryStatus {
+  canRetry: boolean;
+}
+
 export type DashboardDataSource = typeof DashboardDataSource[keyof typeof DashboardDataSource];
 
 

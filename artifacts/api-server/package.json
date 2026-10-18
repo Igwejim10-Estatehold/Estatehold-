@@ -13,6 +13,7 @@
     "test:executive-access": "node --experimental-strip-types --test ./tests/executive-access.test.mjs",
     "test:property-photo-exif": "node --experimental-strip-types --test ./tests/property-photo-exif.test.mjs",
     "test:property-photo-cleanup": "node --experimental-strip-types --test ./tests/property-photo-cleanup.test.mjs",
+    "test:property-photo-retry": "node --experimental-strip-types --test ./tests/property-photo-retry.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

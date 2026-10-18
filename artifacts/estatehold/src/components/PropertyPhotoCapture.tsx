@@ -36,8 +36,9 @@ function positionOnce(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 }));
 }
 
-export default function PropertyPhotoCapture({ listingLatitude, listingLongitude, proof, onProofChange }: {
+export default function PropertyPhotoCapture({ listingLatitude, listingLongitude, proof, onProofChange, testIdPrefix = 'property-photo-capture' }: {
   listingLatitude: number; listingLongitude: number; proof: LivePropertyProof | null; onProofChange: (proof: LivePropertyProof | null) => void;
+  testIdPrefix?: string;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -104,8 +105,8 @@ export default function PropertyPhotoCapture({ listingLatitude, listingLongitude
   };
   return <section className="space-y-3 rounded-2xl border border-[#dce5dd] bg-[#f7faf6] p-4 sm:col-span-2">
     <div><h3 className="font-bold">Live property verification photo</h3><p className="mt-1 text-xs leading-5 text-[#68776d]">Camera capture and GPS/time metadata provide a verification signal, not cryptographic proof; browser-provided details can be altered. No gallery upload is accepted. Camera and location are requested when you start capture.</p></div>
-    {!cameraReady ? <button type="button" disabled={busy} onClick={start} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Opening camera…' : 'Take Live Photo at Location'}</button> :
-      <div className="space-y-3"><video ref={videoRef} autoPlay playsInline muted className="max-h-72 w-full rounded-xl bg-black object-cover"/><button type="button" disabled={busy} onClick={capture} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Capturing…' : 'Capture live photo'}</button></div>}
+     {!cameraReady ? <button data-testid={`${testIdPrefix}-open-camera`} type="button" disabled={busy} onClick={start} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Opening camera…' : 'Take Live Photo at Location'}</button> :
+       <div className="space-y-3"><video ref={videoRef} autoPlay playsInline muted className="max-h-72 w-full rounded-xl bg-black object-cover"/><button data-testid={`${testIdPrefix}-capture-photo`} type="button" disabled={busy} onClick={capture} className="min-h-11 rounded-xl bg-[#183b22] px-4 text-sm font-bold text-white">{busy ? 'Capturing…' : 'Capture live photo'}</button></div>}
     {proof && distance !== null && <div className="space-y-2">
       <p className={`text-sm font-semibold ${distance <= 100 ? 'text-green-800' : 'text-red-700'}`}>Photo taken {Math.round(distance)}m from listing pin — {distance <= 100 ? 'within 100m' : 'outside the 100m verification range'}.</p>
       <MapContainer center={[listingLatitude, listingLongitude]} zoom={15} scrollWheelZoom={false} className="h-48 w-full rounded-xl">

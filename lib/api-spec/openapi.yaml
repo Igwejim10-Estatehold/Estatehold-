@@ -181,6 +181,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Property"
   /properties/{propertyId}/photos:
+    get:
+      operationId: getPropertyPhotoRetryStatus
+      tags: [marketplace]
+      summary: Check whether the owner can submit verification photo evidence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/PropertyId"
+      responses:
+        "200":
+          description: Photo retry eligibility for the listing owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyPhotoRetryStatus"
     post:
       operationId: createPropertyPhoto
       tags: [marketplace]
@@ -1232,6 +1247,11 @@ components:
         device: { type: string }
         distanceMeters: { type: number }
         within100m: { type: boolean }
+    PropertyPhotoRetryStatus:
+      type: object
+      required: [canRetry]
+      properties:
+        canRetry: { type: boolean }
     Dashboard:
       type: object
       required: [items, location, greeting]

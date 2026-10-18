@@ -6,6 +6,7 @@ import {
   CreatePropertyResponse,
   GetDashboardResponse,
   GetPropertyParams,
+  GetPropertyPhotoRetryStatusResponse,
   GetPropertyResponse,
   GetPublicConfigResponse,
   ListPropertiesQueryParams,
@@ -32,6 +33,7 @@ import {
   supabaseRest,
 } from "../lib/supabase";
 import { cleanupUnreferencedPropertyPhoto } from "../lib/property-photo-cleanup";
+import { canRetryPropertyPhoto } from "../lib/property-photo-retry";
 
 const router: IRouter = Router();
 
@@ -253,7 +255,7 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
   const user = await requireUser(req, res);
   if (!user) return;
   const propertyId = String(req.params.propertyId);
-  const rows = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(propertyId)}&select=id,owner_id,gps_lat,gps_lng&limit=1`);
+  const rows = await supabaseRest<DbRow[]>(`properties?id=eq.${encodeURIComponent(propertyId)}&select=id,owner_id,gps_lat,gps_lng,listing_moderation_status&limit=1`);
   const property = rows[0];
   if (!property) { res.status(404).json({ message: "Property not found." }); return; }
   if (property["owner_id"] !== user.id) { res.status(403).json({ message: "Only the listing owner can attach a verification photo." }); return; }
@@ -286,6 +288,14 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
       );
     }
   };
+  const existingPhotos = await supabaseRest<DbRow[]>(
+    `property_photos?property_id=eq.${encodeURIComponent(propertyId)}&select=id&limit=1`,
+  );
+  if (!canRetryPropertyPhoto(property["listing_moderation_status"], existingPhotos.length > 0)) {
+    await cleanupRejectedUpload();
+    res.status(409).json({ message: "This listing already has verification evidence under review or accepted. It cannot be replaced." });
+    return;
+  }
   const takenAt = parsed.data.takenAt.getTime();
   const ageMs = Date.now() - takenAt;
   if (!Number.isFinite(takenAt) || ageMs < -60_000 || ageMs > 30 * 60_000) {
@@ -351,9 +361,57 @@ router.post("/properties/:propertyId/photos", requireAuth, async (req, res): Pro
     body: { property_id: propertyId, photo_url: photoPath, lat: parsed.data.latitude, lng: parsed.data.longitude, taken_at: new Date(takenAt).toISOString(), taken_by: user.id, device: parsed.data.device },
     prefer: "return=representation",
   });
+  if (property["listing_moderation_status"] === "rejected") {
+    const reopened = await supabaseRest<DbRow[]>(
+      `properties?id=eq.${encodeURIComponent(propertyId)}&listing_moderation_status=eq.rejected&select=id`,
+      {
+        method: "PATCH",
+        body: { listing_moderation_status: "pending", is_active: false },
+        prefer: "return=representation",
+      },
+    );
+    if (!reopened.length) {
+      await supabaseRest(`property_photos?id=eq.${encodeURIComponent(String(saved[0]?.["id"] ?? ""))}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      });
+      await cleanupRejectedUpload();
+      res.status(409).json({ message: "This listing was already resubmitted. Refresh the page before trying again." });
+      return;
+    }
+  }
   res.status(201).json(CreatePropertyPhotoResponse.parse({
     id: saved[0]?.["id"], propertyId, photoUrl: photoPath, latitude: parsed.data.latitude, longitude: parsed.data.longitude,
     takenAt: new Date(takenAt).toISOString(), takenBy: user.id, device: parsed.data.device, distanceMeters, within100m: true,
+  }));
+});
+
+router.get("/properties/:propertyId/photos/retry-status", requireAuth, async (req, res): Promise<void> => {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  const params = GetPropertyParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ message: "A valid property ID is required." });
+    return;
+  }
+  const propertyId = params.data.propertyId;
+  const properties = await supabaseRest<DbRow[]>(
+    `properties?id=eq.${encodeURIComponent(propertyId)}&select=id,owner_id,listing_moderation_status&limit=1`,
+  );
+  const property = properties[0];
+  if (!property) {
+    res.status(404).json({ message: "Property not found." });
+    return;
+  }
+  if (property["owner_id"] !== user.id) {
+    res.status(403).json({ message: "Only the listing owner can retry its verification photo." });
+    return;
+  }
+  const photos = await supabaseRest<DbRow[]>(
+    `property_photos?property_id=eq.${encodeURIComponent(propertyId)}&select=id&limit=1`,
+  );
+  res.json(GetPropertyPhotoRetryStatusResponse.parse({
+    canRetry: canRetryPropertyPhoto(property["listing_moderation_status"], photos.length > 0),
   }));
 });
 

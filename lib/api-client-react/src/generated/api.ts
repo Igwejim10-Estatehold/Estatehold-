@@ -71,6 +71,7 @@ import type {
   PropertyInput,
   PropertyPhoto,
   PropertyPhotoInput,
+  PropertyPhotoRetryStatus,
   PublicConfig,
   ReviewLandlordKycInput,
   RevokeExecutiveRoleResult,
@@ -833,6 +834,83 @@ export const useUpdateProperty = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpdatePropertyMutationOptions(options));
     }
+
+export const getGetPropertyPhotoRetryStatusUrl = (propertyId: string,) => {
+
+
+
+
+  return `/api/properties/${propertyId}/photos`
+}
+
+/**
+ * @summary Check whether the owner can submit verification photo evidence
+ */
+export const getPropertyPhotoRetryStatus = async (propertyId: string, options?: Parameters<typeof customFetch>[1]): Promise<PropertyPhotoRetryStatus> => {
+
+  return customFetch<PropertyPhotoRetryStatus>(getGetPropertyPhotoRetryStatusUrl(propertyId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPropertyPhotoRetryStatusQueryKey = (propertyId: string,) => {
+    return [
+    `/api/properties/${propertyId}/photos`
+    ] as const;
+    }
+
+
+export const getGetPropertyPhotoRetryStatusQueryOptions = <TData = Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>, TError = ErrorType<unknown>>(propertyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPropertyPhotoRetryStatusQueryKey(propertyId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>> = ({ signal }) => getPropertyPhotoRetryStatus(propertyId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: propertyId !== null && propertyId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPropertyPhotoRetryStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>>
+export type GetPropertyPhotoRetryStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether the owner can submit verification photo evidence
+ */
+
+export function useGetPropertyPhotoRetryStatus<TData = Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>, TError = ErrorType<unknown>>(
+ propertyId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPropertyPhotoRetryStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPropertyPhotoRetryStatusQueryOptions(propertyId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getCreatePropertyPhotoUrl = (propertyId: string,) => {
 
