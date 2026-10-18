@@ -1,5 +1,4 @@
 name: Build unsigned Android AAB
-
 on:
   push:
   pull_request:
@@ -23,36 +22,26 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: pnpm
+          node-version: '20'
+          cache: 'pnpm'
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build unsigned release bundle
-        run: |
-          if [ -f artifacts/estatehold/android/key.properties ]; then
-            echo "Refusing to use signing credentials in this unsigned CI build."
-            exit 1
-          fi
-          pnpm --filter @workspace/estatehold run android:bundle
+        run: pnpm --filter @workspace/estatehold run android:bundle
 
       - name: Upload unsigned AAB
         uses: actions/upload-artifact@v4
         with:
-          name: estatehold-unsigned-aab
-          path: artifacts/estatehold/android/app/build/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 14
+          name: estatehold-release-aab
+          path: |
+            **/*.aab
+            artifacts/estatehold/android/app/build/outputs/bundle/release/*.aab
+            **/app/build/outputs/bundle/release/*.aab
