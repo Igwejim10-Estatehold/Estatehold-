@@ -13,7 +13,8 @@
     "android:bundle": "pnpm run android:sync && cd android && ./gradlew bundleRelease",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test:exif": "tsx --test src/lib/exifGps.test.ts",
-    "test:construction": "tsx --test src/pages/construction-tabs.test.ts"
+    "test:construction": "tsx --test src/pages/construction-tabs.test.ts",
+    "test:dashboard-access": "tsx --test src/lib/dashboard-access.test.ts"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.6.9",

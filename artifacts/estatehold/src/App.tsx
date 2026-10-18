@@ -38,9 +38,15 @@ import AdminMockDashboard from '@/pages/AdminMockDashboard';
 import ExecutiveDashboard from '@/pages/ExecutiveDashboard';
 import ConstructionPage from '@/pages/ConstructionPage';
 import ConstructionAdminQueue from '@/pages/ConstructionAdminQueue';
+import {
+  hasAdminDashboardAccess,
+  hasExecutiveDashboardAccess,
+  isAdminMockMode,
+  isMockOwnerPreviewEnabled,
+} from '@/lib/dashboard-access';
 
 const queryClient = new QueryClient();
-const ADMIN_MOCK_MODE = import.meta.env.DEV && import.meta.env.VITE_ADMIN_MOCK_MODE === 'true';
+const ADMIN_MOCK_MODE = isAdminMockMode(import.meta.env.DEV, import.meta.env.VITE_ADMIN_MOCK_MODE);
 const routes = [
   ['/hotels', 'Hotels & short-lets', Building2], ['/construction', 'Construction', Building2], ['/register-agent', 'Register as an agent', BadgeCheck],
   ['/agent-dashboard', 'Agent dashboard', Activity],
@@ -284,10 +290,20 @@ function AppContent() {
   });
   const mockOwnerEmail = 'igwejim10@gmail.com';
   const [mockOwnerPreviewEmail, setMockOwnerPreviewEmail] = useState('');
-  const [mockOwnerPreview, setMockOwnerPreview] = useState(() => import.meta.env.DEV && localStorage.getItem('estatehold-mock-owner-preview')?.toLowerCase() === mockOwnerEmail);
-  const mockOwnerPreviewAvailable = import.meta.env.DEV && ADMIN_MOCK_MODE;
+  const [mockOwnerPreview, setMockOwnerPreview] = useState(() => isMockOwnerPreviewEnabled({
+    development: import.meta.env.DEV,
+    adminMockMode: ADMIN_MOCK_MODE,
+    storedEmail: localStorage.getItem('estatehold-mock-owner-preview'),
+    ownerEmail: mockOwnerEmail,
+  }));
+  const mockOwnerPreviewAvailable = ADMIN_MOCK_MODE;
   const enableMockOwnerPreview = () => {
-    if (!mockOwnerPreviewAvailable || mockOwnerPreviewEmail.trim().toLowerCase() !== mockOwnerEmail) return;
+    if (!isMockOwnerPreviewEnabled({
+      development: import.meta.env.DEV,
+      adminMockMode: mockOwnerPreviewAvailable,
+      storedEmail: mockOwnerPreviewEmail,
+      ownerEmail: mockOwnerEmail,
+    })) return;
     localStorage.setItem('estatehold-mock-owner-preview', mockOwnerEmail);
     setMockOwnerPreview(true);
   };
@@ -870,7 +886,7 @@ function AppContent() {
       case '/executive':
         if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
         if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
-        if (!mockOwnerPreview && String(profile.data?.role) !== 'executive') {
+        if (!mockOwnerPreview && !hasExecutiveDashboardAccess(profile.data?.role)) {
           if (isOwnerAccount) return <div className="mx-auto max-w-xl space-y-4 py-12"><PageIntro eyebrow="Owner recovery" title={ownerSetupPending?'Restoring owner access':'Executive access needs repair'} text={ownerSetupMessage||'Your signed-in owner email is recognized. We are checking the owner-only promotion path.'}/>{ownerSetupMessage&&<Link href="/setup-owner" className="inline-flex rounded-xl bg-[#173b24] px-4 py-3 text-sm font-bold text-white">Open one-time owner setup</Link>}</div>;
           return <Redirect to="/unauthorized"/>;
         }
@@ -878,7 +894,7 @@ function AppContent() {
       case '/admin':
         if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
         if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
-        if (!mockOwnerPreview && !['admin', 'executive'].includes(String(profile.data?.role))) return <Redirect to="/unauthorized"/>;
+        if (!mockOwnerPreview && !hasAdminDashboardAccess(profile.data?.role)) return <Redirect to="/unauthorized"/>;
         if (ADMIN_MOCK_MODE) return <>{mockOwnerPreviewBanner}<AdminMockDashboard/></>;
         return <div className="space-y-6"><ComplianceDashboard token={authSession?.access_token} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/><PageIntro eyebrow="Operations" title="Review desk" text="Operational queues and compliance controls. Access is governed by your Estatehold role."/><Notice tone="amber">Escrow can be released only after the buyer confirms handover and an administrator records compliance approval. Agent commissions transfer only after release.</Notice>
           {adminQuery.isLoading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"><LoadingCard/><LoadingCard/><LoadingCard/></div> : adminQuery.isError ? <ErrorState onRetry={() => adminQuery.refetch()}/> : adminQuery.data && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{[['Pending KYC',adminQuery.data.pendingKyc,BadgeCheck],['Delisting reviews',adminQuery.data.pendingDelistings,Building2],['Open complaints',adminQuery.data.openComplaints,MessageSquareWarning],['Held escrows',adminQuery.data.heldEscrows,LockKeyhole],['Open sourcing requests',adminQuery.data.openRequests,Compass],['Attorney reviews',adminQuery.data.attorneyReviews,FileCheck2]].map(([name,count,Icon])=>{const I=Icon as typeof Home; return <div key={String(name)} className="rounded-2xl border border-[#e4eae3] bg-white p-5"><div className="flex items-center justify-between"><span className="text-sm font-semibold text-[#65746a]">{String(name)}</span><I size={18} className="text-[#16A34A]"/></div><p className="mt-3 font-display text-3xl font-extrabold">{String(count)}</p></div>})}</div>}
