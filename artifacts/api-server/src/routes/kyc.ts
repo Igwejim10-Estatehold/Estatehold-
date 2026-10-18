@@ -5,10 +5,77 @@ import { encryptPayoutDetails } from "../lib/payout-encryption";
 import { supabaseRest } from "../lib/supabase";
 
 const router: IRouter = Router();
+const OWNER_EMAIL = "igwejim10@gmail.com";
 const text = (value: unknown) => typeof value === "string" ? value.trim() : "";
 const privatePath = (value: string, userId: string) =>
   value.startsWith(`${userId}/`) && !value.split("/").includes("..") && !value.startsWith("/");
 const encrypt = (value: string) => encryptPayoutDetails(JSON.stringify({ value }));
+
+async function promoteOwner(req: import("express").Request, res: import("express").Response, allowExistingExecutive: boolean) {
+  const user = await requireUser(req, res);
+  if (!user) return;
+  if (user.email?.trim().toLowerCase() !== OWNER_EMAIL) {
+    res.status(403).json({ message: "Only the verified Estatehold owner account can use owner setup." });
+    return;
+  }
+
+  if (!allowExistingExecutive) {
+    const existing = await supabaseRest<DbRow[]>(
+      "profiles?select=id&role=eq.executive&limit=1",
+    );
+    if (existing.some((profile) => String(profile["id"]) !== user.id)) {
+      res.status(409).json({ message: "An executive account already exists. Use the owner setup page to restore the designated owner account." });
+      return;
+    }
+  }
+
+  const rows = await supabaseRest<DbRow[]>(
+    `profiles?id=eq.${encodeURIComponent(user.id)}&select=id,email,role`,
+  );
+  const current = rows[0];
+  if (current && String(current["email"] ?? "").trim().toLowerCase() !== OWNER_EMAIL) {
+    res.status(403).json({ message: "The signed-in account does not match the owner profile." });
+    return;
+  }
+  const values = {
+    id: user.id,
+    email: OWNER_EMAIL,
+    role: "executive",
+    is_executive: true,
+    is_admin: true,
+    is_verified: true,
+    verification_status: "verified",
+    updated_at: new Date().toISOString(),
+  };
+  const updated = await supabaseRest<DbRow[]>(
+    "profiles?on_conflict=id&select=id,email,role,is_executive,is_admin,is_verified",
+    {
+      method: "POST",
+      body: values,
+      prefer: "resolution=merge-duplicates,return=representation",
+    },
+  );
+  await supabaseRest("admin_audit_logs", {
+    method: "POST",
+    body: {
+      actor_id: user.id,
+      action: "owner_executive_bootstrap",
+      entity_type: "profile",
+      entity_id: user.id,
+      reason: "Owner-only self-promotion",
+    },
+    prefer: "return=minimal",
+  });
+  res.json({ success: true, profile: updated[0] ?? values });
+}
+
+router.post("/executive/bootstrap-owner", requireAuth, async (req, res): Promise<void> => {
+  await promoteOwner(req, res, false);
+});
+
+router.post("/setup-owner/promote", requireAuth, async (req, res): Promise<void> => {
+  await promoteOwner(req, res, true);
+});
 
 router.post("/account/landlord-application", requireAuth, async (req, res): Promise<void> => {
   const user = await requireUser(req, res);

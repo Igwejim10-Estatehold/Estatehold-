@@ -306,11 +306,53 @@ function AppContent() {
   const [adminWorkspaceLoading, setAdminWorkspaceLoading] = useState(false);
   const [adminWorkspaceTab, setAdminWorkspaceTab] = useState('Pending Agents');
   const [adminWorkspaceReload, setAdminWorkspaceReload] = useState(0);
+  const [ownerSetupPending, setOwnerSetupPending] = useState(false);
+  const [ownerSetupMessage, setOwnerSetupMessage] = useState('');
   const queryClient = useQueryClient();
   const config = useGetPublicConfig({ query: { queryKey: getGetPublicConfigQueryKey() } });
   const health = useHealthCheck({ query: { queryKey: getHealthCheckQueryKey() } });
   const dashboard = useGetDashboard({ query: { enabled: location === '/', queryKey: getGetDashboardQueryKey(), retry: false } });
   const profile = useGetProfile({ query: { enabled: !!authSession || (!mockOwnerPreview && ['/profile','/admin','/executive','/agent-dashboard'].includes(location)), queryKey: getGetProfileQueryKey(), retry: false } });
+  const isOwnerAccount = authSession?.user?.email?.trim().toLowerCase() === mockOwnerEmail;
+  useEffect(() => {
+    if (location !== '/executive' || !authSession || !isOwnerAccount || profile.isLoading || profile.data?.role === 'executive') return;
+    let active = true;
+    setOwnerSetupPending(true);
+    fetch('/api/executive/bootstrap-owner', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authSession.access_token}` },
+    }).then(async response => {
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || 'Owner access could not be restored.');
+      if (active) {
+        setOwnerSetupMessage('Owner executive access has been restored.');
+        refresh(getGetProfileQueryKey());
+      }
+    }).catch(error => {
+      if (active) setOwnerSetupMessage(error instanceof Error ? error.message : 'Owner access could not be restored.');
+    }).finally(() => { if (active) setOwnerSetupPending(false); });
+    return () => { active = false; };
+  }, [location, authSession?.access_token, isOwnerAccount, profile.isLoading, profile.data?.role]);
+  const promoteCurrentOwner = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!authSession || !isOwnerAccount) return;
+    setOwnerSetupPending(true);
+    setOwnerSetupMessage('');
+    try {
+      const response = await fetch('/api/setup-owner/promote', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authSession.access_token}` },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload?.message || 'Owner setup failed.');
+      setOwnerSetupMessage('Owner account promoted. Your executive access is active.');
+      refresh(getGetProfileQueryKey());
+    } catch (error) {
+      setOwnerSetupMessage(error instanceof Error ? error.message : 'Owner setup failed.');
+    } finally {
+      setOwnerSetupPending(false);
+    }
+  };
   const payoutBanks = useGetPayoutBanks({ query: { enabled: location === '/profile' && !!authSession, queryKey: getGetPayoutBanksQueryKey(), staleTime: 5 * 60 * 1000, retry: false } });
   const payoutDestination = useGetPayoutDestination({ query: { enabled: location === '/profile' && !!authSession, queryKey: [...getGetPayoutDestinationQueryKey(), authSession?.user?.id], retry: false } });
   useEffect(() => {
@@ -819,12 +861,19 @@ function AppContent() {
         return <KycOnboardingPage kind="landlord" accessToken={authSession?.access_token} userId={authSession?.user?.id} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
       case '/tenant-application':
         return <KycOnboardingPage kind="tenant" accessToken={authSession?.access_token} userId={authSession?.user?.id} supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
+      case '/setup-owner':
+        if (!authSession) return <div className="mx-auto max-w-xl py-12"><PageIntro eyebrow="Owner setup" title="Sign in first" text="Sign in to the designated Estatehold owner account, then return here to restore executive access."/><Link href="/sign-in" className="mt-5 inline-flex rounded-xl bg-[#173b24] px-4 py-3 text-sm font-bold text-white">Sign in</Link></div>;
+        if (!isOwnerAccount) return <div className="mx-auto max-w-xl py-12"><PageIntro eyebrow="Restricted setup" title="Owner account required" text="This one-time recovery page only accepts the designated Estatehold owner account."/></div>;
+        return <div className="mx-auto max-w-xl space-y-5 py-12"><PageIntro eyebrow="Owner recovery" title="Restore executive access" text="This securely updates the signed-in owner’s own Estatehold profile. No email or user ID can be entered here."/><div className="rounded-2xl border border-[#e4eae3] bg-white p-5"><p className="text-sm text-[#65746a]">Signed in as <strong className="text-[#173b24]">{authSession.user?.email}</strong></p>{ownerSetupMessage&&<p role="status" className="mt-4 rounded-xl bg-[#f1f7f1] p-3 text-sm text-[#285b34]">{ownerSetupMessage}</p>}<form onSubmit={promoteCurrentOwner} className="mt-5"><button disabled={ownerSetupPending} className="rounded-xl bg-[#173b24] px-5 py-3 text-sm font-bold text-white disabled:opacity-60">{ownerSetupPending?'Restoring access…':'Promote my account to Executive Owner'}</button></form></div><Link href="/executive" className="text-sm font-bold text-[#285b34] underline">Go to Executive dashboard</Link></div>;
       case '/unauthorized':
         return <div className="mx-auto max-w-xl space-y-4 py-12"><PageIntro eyebrow="Restricted area" title="You don’t have access" text="Sign in with an authorized Estatehold admin or executive account, or return to the marketplace."/><div className="flex gap-3"><Link href="/sign-in" className="rounded-xl bg-[#173b24] px-4 py-3 text-sm font-bold text-white">Sign in</Link><Link href="/" className="rounded-xl border px-4 py-3 text-sm font-bold">Marketplace</Link></div></div>;
       case '/executive':
         if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
         if (!mockOwnerPreview && profile.isLoading) return <LoadingCard/>;
-        if (!mockOwnerPreview && String(profile.data?.role) !== 'executive') return <Redirect to="/unauthorized"/>;
+        if (!mockOwnerPreview && String(profile.data?.role) !== 'executive') {
+          if (isOwnerAccount) return <div className="mx-auto max-w-xl space-y-4 py-12"><PageIntro eyebrow="Owner recovery" title={ownerSetupPending?'Restoring owner access':'Executive access needs repair'} text={ownerSetupMessage||'Your signed-in owner email is recognized. We are checking the owner-only promotion path.'}/>{ownerSetupMessage&&<Link href="/setup-owner" className="inline-flex rounded-xl bg-[#173b24] px-4 py-3 text-sm font-bold text-white">Open one-time owner setup</Link>}</div>;
+          return <Redirect to="/unauthorized"/>;
+        }
         return mockOwnerPreview ? <>{mockOwnerPreviewBanner}<ExecutiveDashboard/></> : <ComplianceDashboard token={authSession?.access_token} executive supabaseUrl={config.data?.supabaseUrl} supabaseAnonKey={config.data?.supabaseAnonKey}/>;
       case '/admin':
         if (!authSession && !mockOwnerPreview) return <Redirect to="/unauthorized"/>;
@@ -1098,7 +1147,7 @@ function Router() {
     <Route path="/"><AppContent/></Route><Route path="/browse"><AppContent/></Route><Route path="/hotels"><AppContent/></Route><Route path="/construction"><AppContent/></Route><Route path="/register-agent"><AppContent/></Route><Route path="/agent-dashboard"><AppContent/></Route><Route path="/map"><AppContent/></Route><Route path="/property/:id/edit"><AppContent/></Route><Route path="/property/:id"><AppContent/></Route>
     <Route path="/list-property"><AppContent/></Route><Route path="/request-property"><AppContent/></Route><Route path="/requests"><AppContent/></Route><Route path="/social-housing"><AppContent/></Route><Route path="/complaints/new"><AppContent/></Route>
     <Route path="/wallet"><AppContent/></Route><Route path="/payment-status"><AppContent/></Route><Route path="/installment-calculator"><AppContent/></Route><Route path="/profile"><AppContent/></Route><Route path="/poa/landlord"><AppContent/></Route><Route path="/poa/tenant"><AppContent/></Route>
-    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/landlord-onboarding"><AppContent/></Route><Route path="/tenant-application"><AppContent/></Route><Route path="/unauthorized"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
+    <Route path="/recovery"><AppContent/></Route><Route path="/tenancy-agreement"><AppContent/></Route><Route path="/processing-fees"><AppContent/></Route><Route path="/offices"><AppContent/></Route><Route path="/landlord-kyc"><AppContent/></Route><Route path="/landlord-onboarding"><AppContent/></Route><Route path="/tenant-application"><AppContent/></Route><Route path="/unauthorized"><AppContent/></Route><Route path="/setup-owner"><AppContent/></Route><Route path="/admin"><AppContent/></Route><Route path="/executive"><AppContent/></Route><Route path="/sign-in"><AppContent/></Route><Route path="/sign-up"><AppContent/></Route><Route component={NotFound}/>
   </Switch></RoutedErrorBoundary>;
 }
 function App() {
